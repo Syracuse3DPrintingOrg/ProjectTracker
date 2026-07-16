@@ -78,7 +78,7 @@ def dashboard(request: Request):
         request,
         "dashboard_claude.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "connector_token": _connector_token(settings),
             "tracker_projects": store.list_projects(),
         },

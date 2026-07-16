@@ -33,11 +33,14 @@ class SettingsIn(BaseModel):
 @router.get("/settings")
 def settings_page(request: Request):
     settings = config.load_settings()
+    me = getattr(request.state, "user", None)
+    if auth.auth_required(settings) and (not me or me["role"] != "admin"):
+        return RedirectResponse("/account", status_code=303)
     return templates.TemplateResponse(
         request,
         "settings.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "settings": settings,
             "providers": PROVIDERS,
             "default_model": config.default_model(
@@ -69,10 +72,8 @@ def save_settings(body: SettingsIn):
     for key in ("gemini_api_key", "anthropic_api_key", "openai_api_key"):
         if data.get(key):
             updates[key] = data[key].strip()
-    if data.get("password"):
-        updates["password_hash"] = auth.hash_password(data["password"])
-    if data.get("clear_password"):
-        updates["password_hash"] = ""
+    # Passwords moved to real user accounts (see /api/users); the old
+    # password fields are ignored if an outdated client still sends them.
     if data.get("rotate_display_token"):
         updates["display_token"] = secrets.token_urlsafe(16)
     if data.get("clear_display_token"):

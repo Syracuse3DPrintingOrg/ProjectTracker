@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .. import config
-from ..services import displays
+from ..services import auth, displays
 from .pages import _page_context, templates
 
 router = APIRouter(tags=["displays"])
@@ -47,7 +47,7 @@ def displays_page(request: Request):
         request,
         "displays.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "displays": [
                 _with_urls(d, request, settings) for d in displays.list_displays(settings)
             ],
@@ -55,7 +55,7 @@ def displays_page(request: Request):
             "base_url": _base_url(request, settings),
             "base_url_configured": bool((settings.get("base_url") or "").strip()),
             "has_token": bool(settings.get("display_token")),
-            "needs_token": bool(settings.get("password_hash")),
+            "needs_token": auth.auth_required(settings),
         },
     )
 

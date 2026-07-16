@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-16
+
+### Added
+
+- **Real user accounts.** SQ now supports multiple people on one
+  instance. Manage users under Settings: everyone gets a username,
+  password, and a role. Admins run the show (settings, users, displays,
+  backups), members have full board access, viewers can look but not
+  touch. Everyone shares the same boards and Today list.
+- **Your account page.** Click your name in the top bar to change your
+  password. Changing it signs you out everywhere, on purpose.
+- **Safe upgrade.** An instance with the old single password keeps
+  working: that password becomes the "admin" account. An instance with
+  no password stays open until you add your first user (who must be an
+  admin). Wall displays and the Claude Code connector keep using their
+  own tokens, so no screen goes dark over this.
+
+### Changed
+
+- **Login asks for a username now.** If you upgraded from the single
+  password, your username is "admin".
+
 ## [0.7.0] - 2026-07-16
 
 ### Added

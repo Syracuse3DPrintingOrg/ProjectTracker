@@ -53,23 +53,34 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(_secret_key(), salt="tracker-session")
 
 
-def make_session_token() -> str:
-    return _serializer().dumps({"user": "owner"})
+def make_session_token(user_id: int, fingerprint: str) -> str:
+    return _serializer().dumps({"uid": user_id, "fp": fingerprint})
 
 
-def valid_session(token: str | None) -> bool:
+def session_user_id(token: str | None) -> int | None:
+    """The logged-in user's id, or None. The token carries a fragment of
+    the password hash, so changing a password invalidates old sessions."""
     if not token:
-        return False
+        return None
     try:
-        _serializer().loads(token, max_age=SESSION_MAX_AGE)
-        return True
+        data = _serializer().loads(token, max_age=SESSION_MAX_AGE)
     except BadSignature:
-        return False
+        return None
+    if not isinstance(data, dict) or "uid" not in data:
+        return None
+    from . import users
+
+    fingerprint = users.session_fingerprint(data["uid"])
+    if fingerprint is None or data.get("fp") != fingerprint:
+        return None
+    return data["uid"]
 
 
 def auth_required(settings: dict | None = None) -> bool:
-    s = settings or config.load_settings()
-    return bool(s.get("password_hash"))
+    """The instance is locked once any user exists."""
+    from . import users
+
+    return users.any_users()
 
 
 def valid_display_token(token: str | None, settings: dict | None = None) -> bool:

@@ -22,7 +22,8 @@
   <div class="nav-links">
     {% block nav %}{% endblock %}
     <a href="/search" title="Search">&#128269;</a>
-    <a href="/settings">Settings</a>
+    {% if user %}<a href="/account" class="muted" title="Your account">{{ user.username }} &middot; {{ user.role }}</a>{% endif %}
+    {% if is_admin or not auth_required %}<a href="/settings">Settings</a>{% endif %}
     {% if auth_required %}<a href="/logout">Log out</a>{% endif %}
   </div>
 </nav>

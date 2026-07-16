@@ -15,12 +15,16 @@ templates.env.globals["checklist_progress"] = checklist.progress
 router = APIRouter(tags=["pages"])
 
 
-def _page_context(settings: dict) -> dict:
+def _page_context(settings: dict, request: Request | None = None) -> dict:
+    user = getattr(request.state, "user", None) if request else None
     return {
         "app_title": settings.get("app_title") or config.APP_NAME,
         "version": config.APP_VERSION,
         "ai_configured": llm.is_configured(settings),
         "auth_required": auth.auth_required(settings),
+        "user": user,
+        "is_admin": bool(user and user.get("role") == "admin"),
+        "can_edit": bool(user is None or user.get("role") in ("admin", "member")),
     }
 
 
@@ -33,7 +37,7 @@ def home(request: Request):
     return templates.TemplateResponse(
         request,
         "welcome.html",
-        {**_page_context(settings), "projects": projects},
+        {**_page_context(settings, request), "projects": projects},
     )
 
 
@@ -54,7 +58,7 @@ def project_board(request: Request, project_id: int):
         request,
         "board.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "project": project,
             "claude_status": claude_status,
             "projects": store.list_projects(),
@@ -72,7 +76,7 @@ def today_page(request: Request):
         request,
         "today.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "projects": store.list_projects(),
             "tasks": store.list_today(),
         },
@@ -86,7 +90,7 @@ def search_page(request: Request, q: str = ""):
     return templates.TemplateResponse(
         request,
         "search.html",
-        {**_page_context(settings), "q": q, "results": results},
+        {**_page_context(settings, request), "q": q, "results": results},
     )
 
 
@@ -97,7 +101,7 @@ def calendar_page(request: Request):
         request,
         "calendar.html",
         {
-            **_page_context(settings),
+            **_page_context(settings, request),
             "projects": store.list_projects(),
         },
     )
@@ -111,20 +115,28 @@ def login_page(request: Request, next: str = "/"):
     return templates.TemplateResponse(
         request,
         "login.html",
-        {**_page_context(settings), "next": next, "error": ""},
+        {**_page_context(settings, request), "next": next, "error": ""},
     )
 
 
 @router.post("/login")
-def login(request: Request, password: str = Form(""), next: str = Form("/")):
+def login(
+    request: Request,
+    username: str = Form(""),
+    password: str = Form(""),
+    next: str = Form("/"),
+):
+    from ..services import users
+
     settings = config.load_settings()
     if not next.startswith("/") or next.startswith("//"):
         next = "/"
-    if auth.check_password(password, settings.get("password_hash", "")):
+    user = users.verify_login(username, password)
+    if user:
         response = RedirectResponse(next, status_code=303)
         response.set_cookie(
             auth.SESSION_COOKIE,
-            auth.make_session_token(),
+            auth.make_session_token(user["id"], user["password_hash"][-12:]),
             max_age=auth.SESSION_MAX_AGE,
             httponly=True,
             samesite="lax",
@@ -133,7 +145,11 @@ def login(request: Request, password: str = Form(""), next: str = Form("/")):
     return templates.TemplateResponse(
         request,
         "login.html",
-        {**_page_context(settings), "next": next, "error": "Wrong password."},
+        {
+            **_page_context(settings, request),
+            "next": next,
+            "error": "Wrong username or password.",
+        },
         status_code=401,
     )
 

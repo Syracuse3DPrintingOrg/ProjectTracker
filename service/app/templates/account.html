@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Your account · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Your account</h1>
+
+  <p style="margin-bottom: 0.4rem;"><strong>{{ me.username }}</strong>
+    <span class="chip">{{ me.role }}</span></p>
+  <p class="muted">
+    {% if me.role == "admin" %}Admin: runs the show. Users, settings, everything.
+    {% elif me.role == "member" %}Member: full board access. Stash tasks, move them, finish them.
+    {% else %}Viewer: look, don't touch. Boards are read-only for you.
+    {% endif %}
+  </p>
+
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Change password</h2>
+  <form id="password-form">
+    <label>Current password</label>
+    <input name="current_password" type="password" required autocomplete="current-password">
+    <label>New password <span class="muted">(at least 4 characters)</span></label>
+    <input name="new_password" type="password" required minlength="4" autocomplete="new-password">
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Change password</button>
+      <span class="assist-note" id="password-note"></span>
+    </div>
+  </form>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+    document.getElementById("password-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const note = document.getElementById("password-note");
+      note.textContent = "Changing...";
+      try {
+        const resp = await fetch("/api/account/password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            current_password: f.current_password.value,
+            new_password: f.new_password.value,
+          }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          note.textContent = data.detail || resp.statusText;
+          return;
+        }
+        note.textContent = "Password changed. Everyone gets logged out, including you. Sending you to the login page...";
+        setTimeout(() => { window.location = "/login"; }, 1500);
+      } catch (err) {
+        note.textContent = "Change failed: " + err.message;
+      }
+    });
+  })();
+</script>
+{% endblock %}

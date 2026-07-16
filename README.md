@@ -49,9 +49,11 @@ SQLite file, no accounts to create.
   everything open. Google Gemini by default; Anthropic Claude, OpenAI, and
   local Ollama also work. Configure a key on the Settings page and the
   assist buttons appear; without one they stay hidden.
-- **Single user**: no login by default (fine on a trusted LAN). Set a
-  password in Settings if the box is reachable from outside; wall displays
-  then authenticate with a token instead of a login.
+- **Users and roles**: open on a trusted LAN by default; add users in
+  Settings to turn on logins. Admins run the instance, members use the
+  boards, viewers can look but not touch. Boards and the Today list are
+  shared. Wall displays and the Claude Code connector authenticate with
+  their own tokens, so devices never see a login page.
 - **Backup**: one JSON download from Settings holds everything and
   restores in place.
 - **Claude Code dashboard**: see what Claude Code is doing across your

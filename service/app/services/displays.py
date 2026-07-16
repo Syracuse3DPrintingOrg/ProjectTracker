@@ -99,7 +99,7 @@ def display_url(display: dict, base_url: str, settings: dict | None = None) -> s
     query = {"d": display["id"]}
     query.update(display.get("params") or {})
     token = s.get("display_token", "")
-    if s.get("password_hash") and token:
+    if token:
         query["token"] = token
     return f"{base_url.rstrip('/')}/display?{urlencode(query)}"
 
@@ -108,7 +108,7 @@ def api_url(display: dict, base_url: str, settings: dict | None = None) -> str:
     s = settings or config.load_settings()
     query = {}
     token = s.get("display_token", "")
-    if s.get("password_hash") and token:
+    if token:
         query["token"] = token
     suffix = f"?{urlencode(query)}" if query else ""
     return f"{base_url.rstrip('/')}/api/display{suffix}"

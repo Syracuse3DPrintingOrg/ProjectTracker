@@ -40,19 +40,15 @@
     </div>
   </form>
 
-  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Access</h2>
-  <p class="muted">With no password set, the app is open to anyone on your network. Set one if this box is reachable from outside your LAN.</p>
-  <form id="access-form">
-    <label>New password <span class="muted">(blank keeps the current one)</span></label>
-    <input name="password" type="password" autocomplete="new-password">
-    <div class="dialog-actions">
-      <button class="primary" type="submit">Save password</button>
-      {% if settings.password_hash %}
-      <button type="button" id="clear-password" class="danger">Remove password</button>
-      {% endif %}
-      <span class="assist-note" id="access-note"></span>
-    </div>
-  </form>
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Users</h2>
+  <p class="muted">With no users, SQ is open on your network. Add the first user (an admin) to turn on logins. Everyone shares the same boards; roles decide who can change what.</p>
+  <table style="width: 100%; border-collapse: collapse;" id="users-table">
+    <tbody id="users-body"></tbody>
+  </table>
+  <div class="dialog-actions">
+    <button type="button" class="primary" id="add-user">Add user</button>
+    <span class="assist-note" id="users-note"></span>
+  </div>
 
   <h2 style="font-size: 1rem; margin-top: 1.6rem;">Backup</h2>
   <p class="muted">The download holds every project, column, and card as JSON.
@@ -75,6 +71,26 @@
     <span class="assist-note" id="token-note"></span>
   </div>
 </div>
+
+<dialog id="user-dialog">
+  <form method="dialog" id="user-form">
+    <label>Username</label>
+    <input name="username" required maxlength="100" placeholder="dan" autocomplete="off">
+    <label>Password <span class="muted">(at least 4 characters)</span></label>
+    <input name="password" type="password" required minlength="4" autocomplete="new-password">
+    <label>Role</label>
+    <select name="role">
+      <option value="admin">Admin (runs the show: users, settings, everything)</option>
+      <option value="member" selected>Member (full board access)</option>
+      <option value="viewer">Viewer (look, don't touch)</option>
+    </select>
+    <div class="dialog-actions">
+      <button type="submit" class="primary">Add user</button>
+      <button type="button" id="user-cancel">Cancel</button>
+      <span class="assist-note" id="user-dialog-note"></span>
+    </div>
+  </form>
+</dialog>
 
 <script src="/static/js/settings.js"></script>
 {% endblock %}
