@@ -25,6 +25,7 @@ class ColumnUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     is_done: bool | None = None
     position: int | None = None
+    wip_limit: int | None = Field(default=None, ge=0, le=99)
 
 
 class CardIn(BaseModel):
@@ -35,6 +36,7 @@ class CardIn(BaseModel):
     labels: str = ""
     priority: int = Field(default=2, ge=0, le=4)
     due_date: str = ""
+    recur_days: int = Field(default=0, ge=0, le=365)
 
 
 class CardUpdate(BaseModel):
@@ -43,6 +45,7 @@ class CardUpdate(BaseModel):
     labels: str | None = None
     priority: int | None = Field(default=None, ge=0, le=4)
     due_date: str | None = None
+    recur_days: int | None = Field(default=None, ge=0, le=365)
 
 
 class MoveIn(BaseModel):
@@ -140,6 +143,8 @@ def update_column(column_id: int, body: ColumnUpdate):
         store.set_column_done(column_id, body.is_done)
     if body.position is not None:
         store.move_column(column_id, body.position)
+    if body.wip_limit is not None:
+        store.set_wip_limit(column_id, body.wip_limit)
     return {"ok": True}
 
 
@@ -164,6 +169,7 @@ def create_card(body: CardIn):
         labels=body.labels,
         priority=body.priority,
         due_date=body.due_date,
+        recur_days=body.recur_days,
     )
 
 

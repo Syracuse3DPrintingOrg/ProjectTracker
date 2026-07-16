@@ -1,0 +1,17 @@
+{
+  "name": "SQ",
+  "short_name": "SQ",
+  "description": "The project tracker for the easily distracted.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#04050a",
+  "theme_color": "#04050a",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -178,6 +178,40 @@ Reply with ONLY a JSON object: {{"description": "..."}}
 """
 
 
+PLAN_PROMPT = """You are helping plan a workday from a project board.
+Today is {today}. Candidate cards (id, title, project, due date, priority
+where P0 is critical and P4 is someday):
+
+{cards}
+
+Pick the 3 to 6 cards that most deserve attention today. Prefer overdue
+work, then due-soon, then high priority; mix projects when sensible.
+Reply with ONLY a JSON array of the chosen card ids, e.g. [4, 12, 7].
+"""
+
+
+def plan_today(candidates: list[dict], today: str) -> list[int]:
+    lines = "\n".join(
+        f"- id={c['id']} \"{c['title']}\" project={c['project_name']}"
+        f" due={c['due_date'] or 'none'} P{c['priority']}"
+        for c in candidates
+    )
+    reply = complete(PLAN_PROMPT.format(today=today, cards=lines))
+    ids = parse_json_response(reply)
+    if not isinstance(ids, list):
+        raise LLMError("expected a JSON array of card ids")
+    valid = {c["id"] for c in candidates}
+    picked = []
+    for i in ids:
+        try:
+            n = int(i)
+        except (TypeError, ValueError):
+            continue
+        if n in valid and n not in picked:
+            picked.append(n)
+    return picked[:8]
+
+
 def suggest_subtasks(title: str, description: str = "") -> list[str]:
     reply = complete(SUBTASKS_PROMPT.format(title=title, description=description))
     items = parse_json_response(reply)

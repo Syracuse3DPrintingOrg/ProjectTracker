@@ -45,6 +45,8 @@
       const done = parseInt(el.dataset.checkDone || "0", 10);
       html += `<span class="chip ${done === total ? "check-full" : ""}">&#9745; ${done}/${total}</span>`;
     }
+    const recur = parseInt(el.dataset.recur || "0", 10);
+    if (recur) html += `<span class="chip" title="Repeats every ${recur} day${recur > 1 ? "s" : ""}">&#8635; ${recur}d</span>`;
     if (p !== 2) html += `<span class="chip p${p}">P${p}</span>`;
     if (due) {
       const overdue = due < new Date().toISOString().slice(0, 10);
@@ -58,7 +60,12 @@
   function updateCounts() {
     document.querySelectorAll("#board .column").forEach(col => {
       const n = col.querySelectorAll(".card").length;
-      col.querySelector(".count").textContent = n ? String(n) : "";
+      const limit = parseInt(col.dataset.wip || "0", 10);
+      const count = col.querySelector(".count");
+      count.textContent = limit ? `${n}/${limit}` : (n ? String(n) : "");
+      const over = limit && n > limit;
+      col.classList.toggle("over-wip", !!over);
+      count.title = over ? "Over the limit. The squirrel is judging you." : "";
     });
   }
 
@@ -70,6 +77,7 @@
     div.dataset.priority = card.priority;
     div.dataset.due = card.due_date;
     div.dataset.labels = card.labels;
+    div.dataset.recur = card.recur_days || 0;
     const items = checklistItems(card.description);
     div.dataset.checkTotal = items.length;
     div.dataset.checkDone = items.filter(i => i.checked).length;
@@ -133,10 +141,15 @@
             evt.item.remove();
             await refreshToday();
           } else {
-            await api(`/api/cards/${cardId}/move`, {
+            const moved = await api(`/api/cards/${cardId}/move`, {
               method: "POST",
               body: JSON.stringify({ column_id: parseInt(to.dataset.columnId, 10), position: evt.newIndex }),
             });
+            // A recurring card bounces out of Done server-side; redraw.
+            if (moved.column_id !== parseInt(to.dataset.columnId, 10)) {
+              window.location.reload();
+              return;
+            }
           }
         } catch (err) {
           alert("Move failed: " + err.message);
@@ -224,6 +237,8 @@
     form.priority.value = card ? String(card.priority) : "2";
     form.due_date.value = card ? card.due_date : "";
     form.labels.value = card ? card.labels : "";
+    const recur = card ? String(card.recur_days || 0) : "0";
+    form.recur_days.value = [...form.recur_days.options].some(o => o.value === recur) ? recur : "0";
     document.getElementById("card-delete").hidden = !card;
     document.getElementById("assist-actions").hidden = !(card && window.BOARD.aiConfigured);
     document.getElementById("assist-note").textContent = "";
@@ -263,6 +278,7 @@
       priority: parseInt(form.priority.value, 10),
       due_date: form.due_date.value,
       labels: form.labels.value,
+      recur_days: parseInt(form.recur_days.value, 10),
     };
     if (!body.title) return;
     try {
@@ -274,6 +290,7 @@
           el.dataset.priority = card.priority;
           el.dataset.due = card.due_date;
           el.dataset.labels = card.labels;
+          el.dataset.recur = card.recur_days || 0;
           el.querySelector(".card-title").textContent = card.title;
           syncCardChecklist(card);
           renderMeta(el);
@@ -342,14 +359,17 @@
       const columnId = col.dataset.columnId;
       const name = col.querySelector(".col-name").textContent;
       const choice = prompt(
-        `Column "${name}"\nType a new name to rename, "done" to toggle the finished flag, or "delete" to remove (must be empty):`
+        `Column "${name}"\nType a new name to rename, "done" to toggle the finished flag, "limit N" for a work-in-progress cap (0 removes it), or "delete" to remove (must be empty):`
       );
       if (!choice) return;
+      const limitMatch = choice.trim().toLowerCase().match(/^limit\s+(\d{1,2})$/);
       try {
         if (choice.trim().toLowerCase() === "delete") {
           await api(`/api/columns/${columnId}`, { method: "DELETE" });
         } else if (choice.trim().toLowerCase() === "done") {
           await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ is_done: !col.classList.contains("is-done") }) });
+        } else if (limitMatch) {
+          await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ wip_limit: parseInt(limitMatch[1], 10) }) });
         } else {
           await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ name: choice.trim() }) });
         }
@@ -443,6 +463,27 @@
       window.location.href = "/";
     } catch (err) { alert(err.message); }
   });
+
+  const planBtn = document.getElementById("plan-day");
+  if (planBtn) {
+    planBtn.addEventListener("click", async () => {
+      planBtn.disabled = true;
+      planBtn.textContent = "Planning...";
+      try {
+        const data = await api("/api/assist/plan-day", { method: "POST" });
+        await refreshToday();
+        planBtn.textContent = data.added.length
+          ? `Added ${data.added.length} task${data.added.length > 1 ? "s" : ""}`
+          : "Nothing to plan";
+      } catch (err) {
+        planBtn.textContent = "\u{1F43F}️ Plan my day";
+        alert("Planning failed: " + err.message);
+      } finally {
+        planBtn.disabled = false;
+        setTimeout(() => { planBtn.textContent = "\u{1F43F}️ Plan my day"; }, 4000);
+      }
+    });
+  }
 
   document.getElementById("clear-done-today").addEventListener("click", async () => {
     try {

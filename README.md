@@ -12,9 +12,11 @@ SQLite file, no accounts to create.
 - **Boards**: multiple projects, each with its own status columns (Backlog,
   To Do, In Progress, Done by default; rename, add, and reorder freely).
 - **Cards**: title, description, priority (P0 to P4), due date, labels,
-  and checklists ("- [ ] step" lines become tickable items with progress
-  shown on the board). Drag cards between columns or reorder within one,
-  on desktop or touch.
+  checklists ("- [ ] step" lines become tickable items with progress
+  shown on the board), and recurrence (a finished recurring card respawns
+  at the start with a fresh due date). Drag cards between columns or
+  reorder within one, on desktop or touch. Columns take optional
+  work-in-progress limits.
 - **Search and filter**: search every project from the top bar; filter
   the board as you type.
 - **Today's Tasks**: drag any card onto the Today rail and it appears on
@@ -42,8 +44,9 @@ SQLite file, no accounts to create.
     (LILYGO T-Display, with button paging) and
     [`examples/esphome-display.yaml`](examples/esphome-display.yaml)
     (generic).
-- **AI assist** (optional): break a card into subtasks or draft its
-  description. Google Gemini by default; Anthropic Claude, OpenAI, and
+- **AI assist** (optional): break a card into subtasks, draft its
+  description, or press Plan my day and let it pick today's tasks from
+  everything open. Google Gemini by default; Anthropic Claude, OpenAI, and
   local Ollama also work. Configure a key on the Settings page and the
   assist buttons appear; without one they stay hidden.
 - **Single user**: no login by default (fine on a trusted LAN). Set a

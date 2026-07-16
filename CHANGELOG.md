@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-16
+
+### Added
+
+- **Recurring cards.** Set a card to repeat (daily, weekly, monthly, and
+  friends) and finishing it sends it back to the start of the board with
+  a fresh due date and an unticked checklist. Perfect for the chores that
+  are never actually done.
+- **Plan my day.** One button on the Today rail asks your AI to pick 3
+  to 6 tasks from everything open, favoring overdue and due-soon work,
+  and drops them on the Today list (and your wall displays).
+- **Work-in-progress limits.** Give any column a cap from its menu
+  ("limit 3") and the header shows 2/3; blow past it and the column turns
+  red. The squirrel says nothing, but you know.
+- **Install it like an app.** SQ now has a proper icon and web app
+  manifest, so a phone or tablet can pin it to the home screen and run
+  it full screen.
+
 ## [0.6.1] - 2026-07-16
 
 ### Fixed

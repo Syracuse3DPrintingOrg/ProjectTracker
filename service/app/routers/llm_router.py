@@ -30,6 +30,28 @@ def subtasks(body: AssistIn):
     return {"subtasks": items, "card": store.get_card(body.card_id)}
 
 
+@router.post("/plan-day")
+def plan_day():
+    """Ask the LLM to pick today's tasks from open cards and add them."""
+    from datetime import date
+
+    if not llm.is_configured():
+        raise HTTPException(400, "no LLM provider configured")
+    candidates = store.plan_candidates()
+    if not candidates:
+        return {"added": [], "note": "nothing open to plan with"}
+    try:
+        ids = llm.plan_today(candidates, date.today().isoformat())
+    except llm.LLMError as exc:
+        raise HTTPException(502, str(exc))
+    added = []
+    for card_id in ids:
+        card = store.set_today(card_id, True)
+        if card:
+            added.append(card)
+    return {"added": added}
+
+
 @router.post("/describe")
 def describe(body: AssistIn):
     card = store.get_card(body.card_id)

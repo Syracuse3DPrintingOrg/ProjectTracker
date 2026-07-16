@@ -37,7 +37,7 @@
   <div class="board-wrap">
     <div class="board" id="board">
       {% for col in columns %}
-      <div class="column {% if col.is_done %}is-done{% endif %}" data-column-id="{{ col.id }}">
+      <div class="column {% if col.is_done %}is-done{% endif %}" data-column-id="{{ col.id }}" data-wip="{{ col.wip_limit }}">
         <div class="column-header">
           <span class="col-name">{{ col.name }}</span>
           <span class="count"></span>
@@ -59,7 +59,10 @@
     <h2>Today's Tasks</h2>
     <div class="hint">Drag cards here to put them on the wall display.</div>
     <div class="cards" id="today-list" data-today="1"></div>
-    <div class="add-card"><button id="clear-done-today">Clear finished</button></div>
+    <div class="add-card">
+      {% if ai_configured %}<button id="plan-day" title="Let the AI pick today's tasks from your open cards">&#128063; Plan my day</button>{% endif %}
+      <button id="clear-done-today" style="margin-top: 0.35rem;">Clear finished</button>
+    </div>
   </aside>
 </div>
 
@@ -88,6 +91,17 @@
       <div>
         <label>Due date</label>
         <input name="due_date" type="date">
+      </div>
+      <div>
+        <label>Repeats</label>
+        <select name="recur_days">
+          <option value="0">Never</option>
+          <option value="1">Daily</option>
+          <option value="2">Every 2 days</option>
+          <option value="7">Weekly</option>
+          <option value="14">Every 2 weeks</option>
+          <option value="30">Monthly-ish</option>
+        </select>
       </div>
     </div>
     <label>Labels <span class="muted">(comma separated)</span></label>

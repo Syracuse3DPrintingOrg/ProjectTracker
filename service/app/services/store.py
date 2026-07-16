@@ -151,6 +151,34 @@ def rename_column(column_id: int, name: str) -> None:
         conn.execute("UPDATE columns SET name = ? WHERE id = ?", (name, column_id))
 
 
+def set_wip_limit(column_id: int, limit: int) -> None:
+    with database.connect() as conn:
+        conn.execute(
+            "UPDATE columns SET wip_limit = ? WHERE id = ?",
+            (max(0, limit), column_id),
+        )
+
+
+def plan_candidates(limit: int = 40) -> list[dict]:
+    """Open cards worth considering for today: not already on the Today
+    list, in active projects, ordered by due date then priority."""
+    with database.connect() as conn:
+        return _rows(
+            conn.execute(
+                "SELECT cards.id, cards.title, cards.due_date, cards.priority,"
+                " projects.name AS project_name"
+                " FROM cards"
+                " JOIN projects ON projects.id = cards.project_id"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE projects.archived = 0 AND projects.status = 'active'"
+                " AND columns.is_done = 0 AND cards.today = 0"
+                " ORDER BY CASE WHEN cards.due_date = '' THEN 1 ELSE 0 END,"
+                " cards.due_date, cards.priority, cards.id LIMIT ?",
+                (limit,),
+            )
+        )
+
+
 def set_column_done(column_id: int, is_done: bool) -> None:
     with database.connect() as conn:
         conn.execute(
@@ -194,7 +222,7 @@ def delete_column(column_id: int) -> bool:
 
 # ---- cards ----
 
-CARD_FIELDS = {"title", "description", "labels", "priority", "due_date"}
+CARD_FIELDS = {"title", "description", "labels", "priority", "due_date", "recur_days"}
 
 
 def list_cards(project_id: int) -> list[dict]:
@@ -221,7 +249,8 @@ def create_card(project_id: int, column_id: int, title: str, **fields) -> dict:
         ).fetchone()[0]
         cur = conn.execute(
             "INSERT INTO cards (project_id, column_id, title, description, labels,"
-            " priority, due_date, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            " priority, due_date, recur_days, position)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 project_id,
                 column_id,
@@ -230,6 +259,7 @@ def create_card(project_id: int, column_id: int, title: str, **fields) -> dict:
                 fields.get("labels", ""),
                 int(fields.get("priority", 2)),
                 fields.get("due_date", ""),
+                int(fields.get("recur_days", 0)),
                 pos,
             ),
         )
@@ -300,7 +330,38 @@ def move_card(card_id: int, column_id: int, position: int) -> dict | None:
             conn.execute("UPDATE cards SET position = ? WHERE id = ?", (i, cid))
         if old_column != column_id:
             _renumber_column(conn, old_column)
+        # A recurring card that lands in a done column respawns for the
+        # next round instead of staying finished.
+        if (
+            card["recur_days"] > 0
+            and target["is_done"]
+            and old_column != column_id
+        ):
+            _respawn(conn, dict(card), column_id)
     return get_card(card_id)
+
+
+def _respawn(conn, card: dict, done_column_id: int) -> None:
+    """Send a recurring card back to the start with a fresh due date and
+    an unticked checklist."""
+    first = conn.execute(
+        "SELECT id FROM columns WHERE project_id = ? AND is_done = 0"
+        " ORDER BY position, id LIMIT 1",
+        (card["project_id"],),
+    ).fetchone()
+    target = first["id"] if first else done_column_id
+    pos = conn.execute(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM cards WHERE column_id = ?",
+        (target,),
+    ).fetchone()[0]
+    description = card["description"].replace("- [x]", "- [ ]").replace("- [X]", "- [ ]")
+    conn.execute(
+        "UPDATE cards SET column_id = ?, position = ?, description = ?,"
+        " due_date = date('now', ?), today = 0, today_position = 0,"
+        " updated_at = datetime('now') WHERE id = ?",
+        (target, pos, description, f"+{card['recur_days']} days", card["id"]),
+    )
+    _renumber_column(conn, done_column_id)
 
 
 def search_cards(query: str, project_id: int | None = None, limit: int = 50) -> list[dict]:
@@ -357,21 +418,23 @@ def import_data(data: dict) -> dict:
             )
         for c in columns:
             conn.execute(
-                "INSERT INTO columns (id, project_id, name, position, is_done)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO columns (id, project_id, name, position, is_done,"
+                " wip_limit) VALUES (?, ?, ?, ?, ?, ?)",
                 (c.get("id"), c["project_id"], c.get("name", "Column"),
-                 c.get("position", 0), c.get("is_done", 0)),
+                 c.get("position", 0), c.get("is_done", 0), c.get("wip_limit", 0)),
             )
         for c in cards:
             conn.execute(
                 "INSERT INTO cards (id, project_id, column_id, title, description,"
-                " labels, priority, due_date, today, today_position, position,"
-                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " labels, priority, due_date, today, today_position, recur_days,"
+                " position, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
                 " COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))",
                 (c.get("id"), c["project_id"], c["column_id"], c.get("title", ""),
                  c.get("description", ""), c.get("labels", ""), c.get("priority", 2),
                  c.get("due_date", ""), c.get("today", 0), c.get("today_position", 0),
-                 c.get("position", 0), c.get("created_at"), c.get("updated_at")),
+                 c.get("recur_days", 0), c.get("position", 0),
+                 c.get("created_at"), c.get("updated_at")),
             )
     return {"projects": len(projects), "columns": len(columns), "cards": len(cards)}
 

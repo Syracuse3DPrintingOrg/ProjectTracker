@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS columns (
     project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
-    is_done INTEGER NOT NULL DEFAULT 0
+    is_done INTEGER NOT NULL DEFAULT 0,
+    wip_limit INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS cards (
     id INTEGER PRIMARY KEY,
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS cards (
     due_date TEXT NOT NULL DEFAULT '',
     today INTEGER NOT NULL DEFAULT 0,
     today_position INTEGER NOT NULL DEFAULT 0,
+    recur_days INTEGER NOT NULL DEFAULT 0,
     position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -75,4 +77,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "status" not in project_cols:
         conn.execute(
             "ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+        )
+    column_cols = {r["name"] for r in conn.execute("PRAGMA table_info(columns)")}
+    if "wip_limit" not in column_cols:
+        conn.execute(
+            "ALTER TABLE columns ADD COLUMN wip_limit INTEGER NOT NULL DEFAULT 0"
+        )
+    card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)")}
+    if "recur_days" not in card_cols:
+        conn.execute(
+            "ALTER TABLE cards ADD COLUMN recur_days INTEGER NOT NULL DEFAULT 0"
         )
