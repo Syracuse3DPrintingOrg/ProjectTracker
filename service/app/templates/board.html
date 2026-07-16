@@ -10,6 +10,8 @@
   <button id="new-project">New project</button>
   <button id="rename-project">Rename</button>
   <button id="archive-project" class="danger">Archive</button>
+  <input id="quick-filter" placeholder="Filter cards..." autocomplete="off"
+         style="width: 180px; margin-left: auto;">
 </div>
 
 <div class="layout">
@@ -47,8 +49,12 @@
     <input type="hidden" name="card_id">
     <label>Title</label>
     <input name="title" required maxlength="500" autocomplete="off">
-    <label>Description <span class="muted">(markdown checklists render as checkboxes)</span></label>
+    <label>Description <span class="muted">(lines like "- [ ] step" become the checklist)</span></label>
     <textarea name="description" rows="7"></textarea>
+    <div id="checklist-box" hidden>
+      <label>Checklist</label>
+      <div id="checklist-items"></div>
+    </div>
     <div class="field-row">
       <div>
         <label>Priority</label>

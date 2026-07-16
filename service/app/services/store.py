@@ -256,6 +256,75 @@ def move_card(card_id: int, column_id: int, position: int) -> dict | None:
     return get_card(card_id)
 
 
+def search_cards(query: str, project_id: int | None = None, limit: int = 50) -> list[dict]:
+    """Search titles, descriptions, and labels across active projects."""
+    like = f"%{query.strip()}%"
+    sql = (
+        "SELECT cards.*, projects.name AS project_name,"
+        " columns.name AS status, columns.is_done AS done"
+        " FROM cards"
+        " JOIN projects ON projects.id = cards.project_id"
+        " JOIN columns ON columns.id = cards.column_id"
+        " WHERE projects.archived = 0"
+        " AND (cards.title LIKE ? OR cards.description LIKE ? OR cards.labels LIKE ?)"
+    )
+    args: list = [like, like, like]
+    if project_id:
+        sql += " AND cards.project_id = ?"
+        args.append(project_id)
+    sql += " ORDER BY cards.updated_at DESC, cards.id DESC LIMIT ?"
+    args.append(limit)
+    with database.connect() as conn:
+        return _rows(conn.execute(sql, args))
+
+
+def export_data() -> dict:
+    """Everything in the database, for backups."""
+    with database.connect() as conn:
+        return {
+            "projects": _rows(conn.execute("SELECT * FROM projects ORDER BY id")),
+            "columns": _rows(conn.execute("SELECT * FROM columns ORDER BY id")),
+            "cards": _rows(conn.execute("SELECT * FROM cards ORDER BY id")),
+        }
+
+
+def import_data(data: dict) -> dict:
+    """Replace the whole database with an export. Counts what landed."""
+    projects = data.get("projects") or []
+    columns = data.get("columns") or []
+    cards = data.get("cards") or []
+    with database.connect() as conn:
+        conn.execute("DELETE FROM cards")
+        conn.execute("DELETE FROM columns")
+        conn.execute("DELETE FROM projects")
+        for p in projects:
+            conn.execute(
+                "INSERT INTO projects (id, name, position, archived, created_at)"
+                " VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))",
+                (p.get("id"), p.get("name", "Project"), p.get("position", 0),
+                 p.get("archived", 0), p.get("created_at")),
+            )
+        for c in columns:
+            conn.execute(
+                "INSERT INTO columns (id, project_id, name, position, is_done)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (c.get("id"), c["project_id"], c.get("name", "Column"),
+                 c.get("position", 0), c.get("is_done", 0)),
+            )
+        for c in cards:
+            conn.execute(
+                "INSERT INTO cards (id, project_id, column_id, title, description,"
+                " labels, priority, due_date, today, today_position, position,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))",
+                (c.get("id"), c["project_id"], c["column_id"], c.get("title", ""),
+                 c.get("description", ""), c.get("labels", ""), c.get("priority", 2),
+                 c.get("due_date", ""), c.get("today", 0), c.get("today_position", 0),
+                 c.get("position", 0), c.get("created_at"), c.get("updated_at")),
+            )
+    return {"projects": len(projects), "columns": len(columns), "cards": len(cards)}
+
+
 def list_due_cards(
     start: str, end: str, project_ids: list[int] | None = None
 ) -> list[dict]:

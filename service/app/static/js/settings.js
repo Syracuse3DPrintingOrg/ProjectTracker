@@ -75,6 +75,31 @@
     });
   }
 
+  document.getElementById("import-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    const note = document.getElementById("backup-note");
+    if (!file) return;
+    if (!confirm("Replace ALL projects, columns, and cards with this backup?")) {
+      e.target.value = "";
+      return;
+    }
+    try {
+      const data = JSON.parse(await file.text());
+      data.confirm = true;
+      const resp = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!resp.ok) throw new Error((await resp.json()).detail || resp.statusText);
+      const counts = await resp.json();
+      note.textContent = `Restored ${counts.projects} projects, ${counts.cards} cards.`;
+    } catch (err) {
+      note.textContent = "Restore failed: " + err.message;
+    }
+    e.target.value = "";
+  });
+
   document.getElementById("rotate-token").addEventListener("click", async () => {
     const data = await save({ rotate_display_token: true }, "token-note", "New token generated.");
     if (data) document.getElementById("display-token").textContent = data.display_token || "none";

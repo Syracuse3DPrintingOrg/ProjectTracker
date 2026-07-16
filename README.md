@@ -8,8 +8,12 @@ ESP32. One Python service, one SQLite file, no accounts to create.
 
 - **Boards**: multiple projects, each with its own status columns (Backlog,
   To Do, In Progress, Done by default; rename, add, and reorder freely).
-- **Cards**: title, description, priority (P0 to P4), due date, and labels.
-  Drag cards between columns or reorder within one, on desktop or touch.
+- **Cards**: title, description, priority (P0 to P4), due date, labels,
+  and checklists ("- [ ] step" lines become tickable items with progress
+  shown on the board). Drag cards between columns or reorder within one,
+  on desktop or touch.
+- **Search and filter**: search every project from the top bar; filter
+  the board as you type.
 - **Today's Tasks**: drag any card onto the Today rail and it appears on
   your wall displays. Cards that reach a done column can be cleared from
   the list in one click.
@@ -38,6 +42,8 @@ ESP32. One Python service, one SQLite file, no accounts to create.
 - **Single user**: no login by default (fine on a trusted LAN). Set a
   password in Settings if the box is reachable from outside; wall displays
   then authenticate with a token instead of a login.
+- **Backup**: one JSON download from Settings holds everything and
+  restores in place.
 
 ## Run it
 

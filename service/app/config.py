@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.3.0"
 APP_NAME = "Project Tracker"
 
 DATA_DIR = Path(os.environ.get("TRACKER_DATA_DIR", "data"))

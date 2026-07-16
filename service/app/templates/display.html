@@ -72,6 +72,7 @@
         return `<li class="${t.done ? "done" : ""} p${t.priority}">` +
           `<span class="box">${t.done ? "✓" : "▢"}</span>` +
           `<span class="title">${esc(t.title)}</span>` +
+          (t.checklist ? `<span class="proj">☑ ${esc(t.checklist)}</span>` : "") +
           (t.due ? `<span class="due ${overdue ? "overdue" : ""}">${esc(t.due)}</span>` : "") +
           `<span class="proj">${esc(t.project)}</span></li>`;
       }).join("");

@@ -25,12 +25,26 @@
     return div.innerHTML;
   }
 
+  function checklistItems(text) {
+    const items = [];
+    (text || "").split("\n").forEach(line => {
+      const m = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.*)$/);
+      if (m) items.push({ checked: m[1] !== " ", text: m[2] });
+    });
+    return items;
+  }
+
   function renderMeta(el) {
     const meta = el.querySelector(".meta");
     const p = parseInt(el.dataset.priority || "2", 10);
     const due = el.dataset.due;
     const labels = (el.dataset.labels || "").split(",").map(s => s.trim()).filter(Boolean);
     let html = "";
+    const total = parseInt(el.dataset.checkTotal || "0", 10);
+    if (total) {
+      const done = parseInt(el.dataset.checkDone || "0", 10);
+      html += `<span class="chip ${done === total ? "check-full" : ""}">&#9745; ${done}/${total}</span>`;
+    }
     if (p !== 2) html += `<span class="chip p${p}">P${p}</span>`;
     if (due) {
       const overdue = due < new Date().toISOString().slice(0, 10);
@@ -56,6 +70,9 @@
     div.dataset.priority = card.priority;
     div.dataset.due = card.due_date;
     div.dataset.labels = card.labels;
+    const items = checklistItems(card.description);
+    div.dataset.checkTotal = items.length;
+    div.dataset.checkDone = items.filter(i => i.checked).length;
     div.innerHTML = '<div class="card-title"></div><div class="meta"></div>';
     div.querySelector(".card-title").textContent = card.title;
     renderMeta(div);
@@ -155,6 +172,50 @@
 
   /* ---- card dialog ---- */
 
+  function renderDialogChecklist() {
+    const box = document.getElementById("checklist-box");
+    const wrap = document.getElementById("checklist-items");
+    const cardId = form.card_id.value;
+    const items = checklistItems(form.description.value);
+    box.hidden = !cardId || items.length === 0;
+    wrap.innerHTML = "";
+    items.forEach((item, i) => {
+      const label = document.createElement("label");
+      label.className = "checklist-item";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = item.checked;
+      input.addEventListener("change", async () => {
+        try {
+          const card = await api(`/api/cards/${cardId}/checklist`, {
+            method: "POST",
+            body: JSON.stringify({ index: i, checked: input.checked }),
+          });
+          form.description.value = card.description;
+          syncCardChecklist(card);
+          renderDialogChecklist();
+        } catch (err) {
+          input.checked = !input.checked;
+          alert(err.message);
+        }
+      });
+      const span = document.createElement("span");
+      span.textContent = item.text;
+      if (item.checked) span.style.textDecoration = "line-through";
+      label.append(input, span);
+      wrap.appendChild(label);
+    });
+  }
+
+  function syncCardChecklist(card) {
+    const el = document.querySelector(`#board .card[data-card-id="${card.id}"]`);
+    if (!el) return;
+    const items = checklistItems(card.description);
+    el.dataset.checkTotal = items.length;
+    el.dataset.checkDone = items.filter(i => i.checked).length;
+    renderMeta(el);
+  }
+
   function openCardDialog(card, columnId) {
     dialogColumnId = columnId;
     form.card_id.value = card ? card.id : "";
@@ -166,6 +227,7 @@
     document.getElementById("card-delete").hidden = !card;
     document.getElementById("assist-actions").hidden = !(card && window.BOARD.aiConfigured);
     document.getElementById("assist-note").textContent = "";
+    renderDialogChecklist();
     dialog.showModal();
   }
 
@@ -213,6 +275,7 @@
           el.dataset.due = card.due_date;
           el.dataset.labels = card.labels;
           el.querySelector(".card-title").textContent = card.title;
+          syncCardChecklist(card);
           renderMeta(el);
         }
         await refreshToday();
@@ -251,6 +314,8 @@
     try {
       const data = await api(`/api/assist/${kind}`, { method: "POST", body: JSON.stringify({ card_id: parseInt(id, 10) }) });
       form.description.value = data.card.description;
+      syncCardChecklist(data.card);
+      renderDialogChecklist();
       note.textContent = "Done. Review and save.";
     } catch (err) {
       note.textContent = err.message;
@@ -330,6 +395,16 @@
       await api("/api/today/clear-done", { method: "POST" });
       await refreshToday();
     } catch (err) { alert(err.message); }
+  });
+
+  /* ---- quick filter ---- */
+
+  document.getElementById("quick-filter").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll("#board .card").forEach(el => {
+      const hay = (el.dataset.title + " " + el.dataset.labels).toLowerCase();
+      el.style.display = !q || hay.includes(q) ? "" : "none";
+    });
   });
 
   /* ---- init ---- */

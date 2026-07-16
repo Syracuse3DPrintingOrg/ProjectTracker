@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Search · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="panel" style="max-width: 760px;">
+  <h1>Search</h1>
+  <form method="get" action="/search">
+    <input name="q" value="{{ q }}" placeholder="Title, description, or label" autofocus autocomplete="off">
+  </form>
+  {% if q %}
+  <p class="muted" style="margin-bottom: 0.2rem;">{{ results | length }} result{{ "" if results | length == 1 else "s" }}</p>
+  <ul class="list-plain">
+    {% for c in results %}
+    <li>
+      <a href="/project/{{ c.project_id }}">{{ c.title }}</a>
+      {% set done, total = checklist_progress(c.description) %}
+      {% if total %}<span class="chip">&#9745; {{ done }}/{{ total }}</span>{% endif %}
+      {% if c.due_date %}<span class="chip due">{{ c.due_date }}</span>{% endif %}
+      {% if c.priority != 2 %}<span class="chip p{{ c.priority }}">P{{ c.priority }}</span>{% endif %}
+      <span class="muted">{{ c.project_name }} · {{ c.status }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if not results %}<p class="muted">Nothing matches.</p>{% endif %}
+  {% endif %}
+</div>
+{% endblock %}

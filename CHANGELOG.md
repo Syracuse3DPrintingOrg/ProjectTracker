@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-16
+
+### Added
+
+- **Checklists on cards.** Lines like "- [ ] sand the door" in a card's
+  description become a real checklist: tick items off in the card dialog,
+  see progress ("2/5") on the board, in search results, and on wall
+  displays. The AI subtask button already writes this shape, so its
+  output is now clickable.
+- **Search.** The magnifier in the top bar searches titles, descriptions,
+  and labels across every project. The board also gets a filter box that
+  narrows cards as you type.
+- **Backup and restore.** Download everything as one JSON file from
+  Settings and restore it there too. Restoring replaces all boards, so it
+  asks first.
+
 ## [0.2.0] - 2026-07-16
 
 ### Added

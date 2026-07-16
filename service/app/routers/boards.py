@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from ..services import store
+from ..services import checklist, store
 
 router = APIRouter(prefix="/api", tags=["boards"])
 
@@ -48,6 +48,18 @@ class MoveIn(BaseModel):
 class TodayIn(BaseModel):
     today: bool
     position: int | None = None
+
+
+class ChecklistIn(BaseModel):
+    index: int = Field(ge=0)
+    checked: bool
+
+
+class ImportIn(BaseModel):
+    confirm: bool = False
+    projects: list = []
+    columns: list = []
+    cards: list = []
 
 
 # ---- projects ----
@@ -165,6 +177,45 @@ def move_card(card_id: int, body: MoveIn):
     if not card:
         raise HTTPException(404, "card or column not found")
     return card
+
+
+@router.post("/cards/{card_id}/checklist")
+def toggle_checklist(card_id: int, body: ChecklistIn):
+    card = store.get_card(card_id)
+    if not card:
+        raise HTTPException(404)
+    updated = checklist.toggle_item(card["description"], body.index, body.checked)
+    if updated is None:
+        raise HTTPException(400, "no checklist item at that index")
+    return store.update_card(card_id, description=updated)
+
+
+@router.get("/search")
+def search(q: str, project_id: int | None = None):
+    if not q.strip():
+        return []
+    return store.search_cards(q, project_id)
+
+
+@router.get("/export")
+def export_data():
+    from .. import config
+
+    return {
+        "app": "projecttracker",
+        "version": config.APP_VERSION,
+        **store.export_data(),
+    }
+
+
+@router.post("/import")
+def import_data(body: ImportIn):
+    if not body.confirm:
+        raise HTTPException(400, "set confirm=true; the import replaces everything")
+    counts = store.import_data(
+        {"projects": body.projects, "columns": body.columns, "cards": body.cards}
+    )
+    return {"ok": True, **counts}
 
 
 @router.post("/cards/{card_id}/today")

@@ -7,9 +7,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import config
-from ..services import auth, llm, store
+from ..services import auth, checklist, llm, store
 
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
+templates.env.globals["checklist_progress"] = checklist.progress
 
 router = APIRouter(tags=["pages"])
 
@@ -67,6 +68,17 @@ def today_page(request: Request):
             "projects": store.list_projects(),
             "tasks": store.list_today(),
         },
+    )
+
+
+@router.get("/search")
+def search_page(request: Request, q: str = ""):
+    settings = config.load_settings()
+    results = store.search_cards(q) if q.strip() else []
+    return templates.TemplateResponse(
+        request,
+        "search.html",
+        {**_page_context(settings), "q": q, "results": results},
     )
 
 

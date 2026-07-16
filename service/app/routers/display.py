@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 
 from .. import config
-from ..services import store
+from ..services import checklist, store
 from .pages import templates
 
 router = APIRouter(tags=["display"])
@@ -20,17 +20,19 @@ router = APIRouter(tags=["display"])
 def _compact_today() -> dict:
     tasks = []
     for card in store.list_today():
-        tasks.append(
-            {
-                "id": card["id"],
-                "title": card["title"],
-                "project": card["project_name"],
-                "status": card["status"],
-                "done": bool(card["done"]),
-                "priority": card["priority"],
-                "due": card["due_date"],
-            }
-        )
+        task = {
+            "id": card["id"],
+            "title": card["title"],
+            "project": card["project_name"],
+            "status": card["status"],
+            "done": bool(card["done"]),
+            "priority": card["priority"],
+            "due": card["due_date"],
+        }
+        done, total = checklist.progress(card["description"])
+        if total:
+            task["checklist"] = f"{done}/{total}"
+        tasks.append(task)
     return {
         "app": "projecttracker",
         "version": config.APP_VERSION,

@@ -54,6 +54,17 @@
     </div>
   </form>
 
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Backup</h2>
+  <p class="muted">The download holds every project, column, and card as JSON.
+    Restoring replaces everything with the file's contents.</p>
+  <div class="dialog-actions">
+    <a class="btn" href="/api/export" download="projecttracker-backup.json">Download backup</a>
+    <label class="btn" style="margin: 0;">Restore from file
+      <input type="file" id="import-file" accept="application/json" hidden>
+    </label>
+    <span class="assist-note" id="backup-note"></span>
+  </div>
+
   <h2 style="font-size: 1rem; margin-top: 1.6rem;">Wall displays</h2>
   <p class="muted">When a password is set, displays authenticate with a token instead:
     <code>/display?token=&hellip;</code> and <code>/api/display?token=&hellip;</code>.</p>

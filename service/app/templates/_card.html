@@ -1,6 +1,8 @@
+{% set done, total = checklist_progress(card.description) %}
 <div class="card" data-card-id="{{ card.id }}"
      data-title="{{ card.title }}" data-priority="{{ card.priority }}"
-     data-due="{{ card.due_date }}" data-labels="{{ card.labels }}">
+     data-due="{{ card.due_date }}" data-labels="{{ card.labels }}"
+     data-check-done="{{ done }}" data-check-total="{{ total }}">
   <div class="card-title">{{ card.title }}</div>
   <div class="meta"></div>
 </div>

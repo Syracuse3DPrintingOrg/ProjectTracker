@@ -130,6 +130,16 @@ label { display: block; margin: 0.6rem 0 0.2rem; color: var(--muted); font-size:
 .chip.p1 { color: var(--danger); border-color: var(--danger); }
 .chip.p3, .chip.p4 { opacity: 0.75; }
 .chip.due { color: var(--warn); border-color: var(--warn); }
+.chip.check-full { color: var(--ok); border-color: var(--ok); }
+.checklist-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.25rem 0;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.checklist-item input { width: auto; }
 .chip.due.overdue { color: #fff; background: var(--danger); border-color: var(--danger); }
 
 .add-card { margin: 0 0.5rem 0.6rem; }
