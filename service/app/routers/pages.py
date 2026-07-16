@@ -70,6 +70,19 @@ def today_page(request: Request):
     )
 
 
+@router.get("/calendar")
+def calendar_page(request: Request):
+    settings = config.load_settings()
+    return templates.TemplateResponse(
+        request,
+        "calendar.html",
+        {
+            **_page_context(settings),
+            "projects": store.list_projects(),
+        },
+    )
+
+
 @router.get("/login")
 def login_page(request: Request, next: str = "/"):
     settings = config.load_settings()

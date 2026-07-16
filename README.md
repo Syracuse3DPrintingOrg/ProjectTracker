@@ -13,12 +13,24 @@ ESP32. One Python service, one SQLite file, no accounts to create.
 - **Today's Tasks**: drag any card onto the Today rail and it appears on
   your wall displays. Cards that reach a done column can be cleared from
   the list in one click.
-- **Status displays**:
-  - A Raspberry Pi (3B+ is plenty) points a browser at `/display`, a
-    self-refreshing full-screen list.
-  - An ESP32 polls `/api/display`, a compact JSON payload built for
-    microcontrollers. A ready-to-adapt ESPHome example is in
-    [`examples/esphome-display.yaml`](examples/esphome-display.yaml).
+- **Calendar**: a month view of everything with a due date, across all
+  projects or a filtered set. Overdue cards stand out; finished ones are
+  crossed off.
+- **Status displays**: register each screen on the Displays page and
+  manage its look (theme, text size, clock, overscan margins) from the
+  tracker.
+  - A **Raspberry Pi** (3B+ is plenty) boots straight into the display:
+    run [`scripts/pi-display-setup.sh`](scripts/pi-display-setup.sh) on a
+    stock Raspberry Pi OS install with the display URL.
+  - An **Android TV** can be popped up remotely: enable Network debugging
+    on the TV, add it with its IP, and press Show. The tracker wakes the
+    TV and opens the display over ADB.
+  - An **ESP32** polls `/api/display`, a compact JSON payload built for
+    microcontrollers. ESPHome examples:
+    [`examples/esphome-tdisplay.yaml`](examples/esphome-tdisplay.yaml)
+    (LILYGO T-Display, with button paging) and
+    [`examples/esphome-display.yaml`](examples/esphome-display.yaml)
+    (generic).
 - **AI assist** (optional): break a card into subtasks or draft its
   description. Google Gemini by default; Anthropic Claude, OpenAI, and
   local Ollama also work. Configure a key on the Settings page and the

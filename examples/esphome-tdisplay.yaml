@@ -1,0 +1,169 @@
+# Today's Tasks on a LILYGO TTGO T-Display (ESP32, ST7789 135x240).
+# The same board Pantry Raider uses for its counter displays, so if you
+# have one spare this is a drop-in wall widget.
+#
+# Set base_url to your tracker; if the tracker has a password, generate a
+# display token (Settings, Wall displays) and put it in display_token.
+# The GPIO35 button pages through the list when it does not fit.
+
+substitutions:
+  base_url: "http://192.168.1.170:9280"
+  display_token: ""
+  poll: 30s
+
+esphome:
+  name: tracker-tdisplay
+  friendly_name: Tracker Display
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+ota:
+  - platform: esphome
+
+http_request:
+  id: tracker_http
+  timeout: 10s
+  verify_ssl: false
+
+globals:
+  - id: titles
+    type: std::vector<std::string>
+    restore_value: no
+  - id: dones
+    type: std::vector<bool>
+    restore_value: no
+  - id: remaining
+    type: int
+    initial_value: "0"
+  - id: total
+    type: int
+    initial_value: "0"
+  - id: page
+    type: int
+    initial_value: "0"
+  - id: fresh
+    type: bool
+    initial_value: "false"
+
+interval:
+  - interval: ${poll}
+    startup_delay: 5s
+    then:
+      - http_request.get:
+          url: "${base_url}/api/display?token=${display_token}"
+          capture_response: true
+          max_response_buffer_size: 8kB
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) { id(fresh) = false; return; }
+                  json::parse_json(body, [](JsonObject root) -> bool {
+                    id(remaining) = root["remaining"] | 0;
+                    id(total) = root["count"] | 0;
+                    id(titles).clear();
+                    id(dones).clear();
+                    for (JsonObject t : root["tasks"].as<JsonArray>()) {
+                      id(titles).push_back(std::string(t["title"] | ""));
+                      id(dones).push_back(t["done"] | false);
+                    }
+                    return true;
+                  });
+                  id(fresh) = true;
+          on_error:
+            then:
+              - lambda: 'id(fresh) = false;'
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO35
+      inverted: true
+    name: Page button
+    on_press:
+      - lambda: |-
+          const int per_page = 5;
+          int pages = (id(titles).size() + per_page - 1) / per_page;
+          if (pages > 1) id(page) = (id(page) + 1) % pages;
+
+output:
+  - platform: ledc
+    pin: GPIO4
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    id: backlight
+    name: Backlight
+    restore_mode: ALWAYS_ON
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO19
+
+font:
+  - file: gfonts://Roboto@700
+    id: font_big
+    size: 22
+  - file: gfonts://Roboto
+    id: font_small
+    size: 15
+
+color:
+  - id: c_muted
+    red: 55%
+    green: 58%
+    blue: 64%
+  - id: c_ok
+    red: 25%
+    green: 73%
+    blue: 31%
+  - id: c_warn
+    red: 82%
+    green: 60%
+    blue: 13%
+
+display:
+  - platform: mipi_spi
+    id: tracker_display
+    model: T-DISPLAY
+    rotation: 90
+    update_interval: 1s
+    lambda: |-
+      const int per_page = 5;
+      if (!id(fresh)) {
+        it.print(4, 2, id(font_big), id(c_warn), "Tracker offline");
+        it.print(4, 34, id(font_small), id(c_muted), "retrying...");
+        return;
+      }
+      it.printf(4, 2, id(font_big), "Today: %d left", id(remaining));
+      if (id(titles).empty()) {
+        it.print(4, 44, id(font_small), id(c_muted), "Nothing on the list");
+        return;
+      }
+      int start = id(page) * per_page;
+      if (start >= (int) id(titles).size()) { id(page) = 0; start = 0; }
+      int y = 32;
+      for (int i = start; i < (int) id(titles).size() && i < start + per_page; i++) {
+        auto title = id(titles)[i].substr(0, 24);
+        if (id(dones)[i]) {
+          it.printf(4, y, id(font_small), id(c_ok), "* %s", title.c_str());
+        } else {
+          it.printf(4, y, id(font_small), "- %s", title.c_str());
+        }
+        y += 20;
+      }
+      int pages = (id(titles).size() + per_page - 1) / per_page;
+      if (pages > 1) {
+        it.printf(it.get_width() - 4, 2, id(font_small), id(c_muted),
+                  TextAlign::TOP_RIGHT, "%d/%d", id(page) + 1, pages);
+      }

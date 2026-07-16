@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Calendar · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="board-header">
+  <h1 id="cal-title" style="min-width: 12rem;"></h1>
+  <button id="cal-prev">&larr;</button>
+  <button id="cal-today">Today</button>
+  <button id="cal-next">&rarr;</button>
+  <details class="cal-filter">
+    <summary class="btn">Projects</summary>
+    <div class="cal-filter-menu">
+      <label style="margin-top: 0;"><input type="checkbox" id="cal-all" checked> All projects</label>
+      {% for p in projects %}
+      <label><input type="checkbox" class="cal-project" value="{{ p.id }}" checked> {{ p.name }}</label>
+      {% endfor %}
+    </div>
+  </details>
+</div>
+
+<div class="calendar" id="calendar"></div>
+
+<script>
+  window.CAL = { projects: {{ projects | tojson }} };
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/calendar.js"></script>
+{% endblock %}

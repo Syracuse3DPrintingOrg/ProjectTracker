@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-16
+
+### Added
+
+- **Calendar view.** A month grid of everything with a due date, across
+  all projects or just the ones you tick in the filter. Overdue cards
+  stand out, finished ones are crossed off, and clicking a card jumps to
+  its board.
+- **A real Displays page.** Register each wall screen (Pi kiosk, Android
+  TV, ESP32) under Displays in the top nav: every display gets its own
+  URL and its look (theme, text size, clock, TV overscan margins, hide
+  finished tasks) is managed from the tracker, not on the device.
+- **Pop up on Android TV.** Add a TV with its IP address, press Show, and
+  the tracker wakes the TV and opens the display on it over network
+  debugging. Hide sends it back home. Enable Developer options and
+  Network debugging on the TV once; the first Show asks you to allow the
+  connection on screen.
+- **One-command Raspberry Pi kiosk.** `scripts/pi-display-setup.sh` turns
+  a stock Raspberry Pi OS install into a display that boots straight into
+  the list, waits for the tracker before starting, restarts if anything
+  crashes, and supports rotated screens.
+- **Nicer display page.** Light, dark, and high-contrast themes, a clock,
+  a progress bar, overdue highlighting, and it only repaints when the
+  list actually changes.
+- **T-Display example.** A ready-to-flash ESPHome config for the LILYGO
+  TTGO T-Display with paging by button, alongside the generic ESP32
+  example.
+
 ## [0.1.0] - 2026-07-16
 
 ### Added

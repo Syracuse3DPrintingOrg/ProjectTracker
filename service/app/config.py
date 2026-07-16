@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 APP_NAME = "Project Tracker"
 
 DATA_DIR = Path(os.environ.get("TRACKER_DATA_DIR", "data"))
@@ -25,6 +25,8 @@ _SAVEABLE = {
     "password_hash",
     "display_token",
     "app_title",
+    "base_url",
+    "displays",
 }
 
 _DEFAULTS = {
@@ -37,6 +39,8 @@ _DEFAULTS = {
     "password_hash": "",
     "display_token": "",
     "app_title": APP_NAME,
+    "base_url": "",
+    "displays": [],
 }
 
 # Environment variable names that override each saved setting.
@@ -50,6 +54,7 @@ _ENV_MAP = {
     "password_hash": "TRACKER_PASSWORD_HASH",
     "display_token": "TRACKER_DISPLAY_TOKEN",
     "app_title": "TRACKER_TITLE",
+    "base_url": "TRACKER_BASE_URL",
 }
 
 _MODEL_DEFAULTS = {

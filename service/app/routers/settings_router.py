@@ -23,6 +23,7 @@ class SettingsIn(BaseModel):
     ollama_url: str | None = None
     llm_model: str | None = None
     app_title: str | None = None
+    base_url: str | None = None
     password: str | None = None
     clear_password: bool | None = None
     rotate_display_token: bool | None = None
@@ -58,6 +59,7 @@ def save_settings(body: SettingsIn):
         "ollama_url",
         "llm_model",
         "app_title",
+        "base_url",
     ):
         if key in data and data[key] is not None:
             updates[key] = data[key].strip()

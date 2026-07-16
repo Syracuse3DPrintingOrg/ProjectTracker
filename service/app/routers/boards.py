@@ -175,6 +175,25 @@ def set_today(card_id: int, body: TodayIn):
     return card
 
 
+@router.get("/calendar")
+def calendar_cards(start: str, end: str, projects: str = ""):
+    """Cards due between start and end (ISO dates), optionally filtered
+    to a comma-separated list of project ids."""
+    import re
+
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", start) or not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}", end
+    ):
+        raise HTTPException(422, "start and end must be YYYY-MM-DD")
+    ids = None
+    if projects.strip():
+        try:
+            ids = [int(p) for p in projects.split(",") if p.strip()]
+        except ValueError:
+            raise HTTPException(422, "projects must be comma-separated ids")
+    return store.list_due_cards(start, end, ids)
+
+
 @router.get("/today")
 def list_today():
     return store.list_today()

@@ -256,6 +256,33 @@ def move_card(card_id: int, column_id: int, position: int) -> dict | None:
     return get_card(card_id)
 
 
+def list_due_cards(
+    start: str, end: str, project_ids: list[int] | None = None
+) -> list[dict]:
+    """Cards with a due date in [start, end], for the calendar.
+
+    Dates are ISO strings (YYYY-MM-DD) so plain string comparison is
+    correct. Archived projects are excluded; project_ids narrows further.
+    """
+    query = (
+        "SELECT cards.*, projects.name AS project_name,"
+        " columns.name AS status, columns.is_done AS done"
+        " FROM cards"
+        " JOIN projects ON projects.id = cards.project_id"
+        " JOIN columns ON columns.id = cards.column_id"
+        " WHERE projects.archived = 0 AND cards.due_date != ''"
+        " AND cards.due_date >= ? AND cards.due_date <= ?"
+    )
+    args: list = [start, end]
+    if project_ids:
+        marks = ",".join("?" for _ in project_ids)
+        query += f" AND cards.project_id IN ({marks})"
+        args.extend(project_ids)
+    query += " ORDER BY cards.due_date, cards.priority, cards.id"
+    with database.connect() as conn:
+        return _rows(conn.execute(query, args))
+
+
 # ---- Today's Tasks ----
 
 def list_today() -> list[dict]:

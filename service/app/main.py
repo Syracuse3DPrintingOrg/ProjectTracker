@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, database
-from .routers import boards, display, llm_router, pages, settings_router
+from .routers import boards, display, displays_router, llm_router, pages, settings_router
 from .services import auth
 
 
@@ -55,5 +55,6 @@ def health() -> dict:
 app.include_router(pages.router)
 app.include_router(boards.router)
 app.include_router(display.router)
+app.include_router(displays_router.router)
 app.include_router(llm_router.router)
 app.include_router(settings_router.router)

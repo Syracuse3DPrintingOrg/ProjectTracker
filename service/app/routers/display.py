@@ -47,7 +47,33 @@ def display_data():
 
 
 @router.get("/display")
-def display_page(request: Request):
+def display_page(request: Request, d: str = ""):
+    """The wall display page.
+
+    Look options come from query parameters; a registered display
+    (?d=<id>) contributes its saved options as defaults, so its look is
+    managed from the Displays page without touching the device.
+    """
+    from ..services import displays as displays_svc
+
+    params: dict = {}
+    if d:
+        entry = displays_svc.get_display(d)
+        if entry:
+            params.update(entry.get("params") or {})
+            params.setdefault("title", entry.get("name", ""))
+    for key in displays_svc.PARAM_KEYS:
+        if key in request.query_params:
+            params[key] = request.query_params[key]
     return templates.TemplateResponse(
-        request, "display.html", {"settings": config.load_settings()}
+        request,
+        "display.html",
+        {
+            "theme": params.get("theme", "dark"),
+            "scale": params.get("scale", "1"),
+            "clock": params.get("clock", "1") not in ("0", "false", ""),
+            "hide_done": params.get("hide_done", "") in ("1", "true"),
+            "tv": params.get("tv", "") in ("1", "true"),
+            "title": params.get("title", ""),
+        },
     )
