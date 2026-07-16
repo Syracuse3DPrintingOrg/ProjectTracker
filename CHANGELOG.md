@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-16
+
+### Fixed
+
+- **The mystery orange bar.** An empty nudge banner (just a squirrel, no
+  message) showed on every board even when there was nothing to nag
+  about. It now only appears when it actually has something to say.
+
+### Changed
+
+- **Sharper, darker, punchier.** Corners are crisp instead of rounded
+  (the menu pills keep their shape), the background is nearly black, and
+  borders and text got a contrast bump. Chips are squared off to match.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added

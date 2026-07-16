@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.6.1"
 APP_NAME = "SQ"
 APP_TAGLINE = "the project tracker for the easily distracted"
 
