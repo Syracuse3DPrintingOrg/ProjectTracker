@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-16
+
+### Added
+
+- **This tracker has a name now: SQ.** Short for Squirrel, because we both
+  know why you have this many projects. New identity across the app, plus
+  a fresh dark theme: deep space background, violet-to-cyan accents, and a
+  little glow where it counts.
+- **Project status.** Every project is Chasing (&#128063;), Buried for
+  later (&#127793;), or Cracked it (&#9989;), set right from the board
+  header. Buried and Cracked projects are left in peace.
+- **Squirrel discipline.** Start a new project while others still have
+  open cards and SQ asks, politely, if you really want to chase the shiny
+  thing (with a list of what you'd be abandoning). Boards also show a
+  gentle nudge about your stalest open project: dismiss it, or click
+  through and go finish something.
+
 ## [0.5.0] - 2026-07-16
 
 ### Added

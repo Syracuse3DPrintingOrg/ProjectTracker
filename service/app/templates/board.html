@@ -4,8 +4,14 @@
 <div class="board-header">
   <select id="project-select">
     {% for p in projects %}
-    <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>{{ p.name }}</option>
+    <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>
+      {%- if p.status == "buried" %}&#127793; {% elif p.status == "cracked" %}&#9989; {% endif %}{{ p.name }}</option>
     {% endfor %}
+  </select>
+  <select id="project-status" class="status-chip" title="Project status">
+    <option value="active" {% if project.status == "active" %}selected{% endif %}>&#128063; Chasing</option>
+    <option value="buried" {% if project.status == "buried" %}selected{% endif %}>&#127793; Buried for later</option>
+    <option value="cracked" {% if project.status == "cracked" %}selected{% endif %}>&#9989; Cracked it</option>
   </select>
   <button id="new-project">New project</button>
   <button id="rename-project">Rename</button>
@@ -19,6 +25,12 @@
   </button>
   <input id="quick-filter" placeholder="Filter cards..." autocomplete="off"
          style="width: 180px; margin-left: auto;">
+</div>
+
+<div class="nudge" id="squirrel-nudge" hidden>
+  <span>&#128063;</span>
+  <span id="nudge-text"></span>
+  <button class="dismiss" id="nudge-dismiss" title="Fine, ignore me">&times;</button>
 </div>
 
 <div class="layout">

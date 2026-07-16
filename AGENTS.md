@@ -1,12 +1,17 @@
-# Project Tracker: Agent Instructions
+# SQ (Project Tracker): Agent Instructions
 
 Canonical instructions for every AI agent working in this repo. `CLAUDE.md`
 is just a pointer to this file; edit here, not there.
 
 ## What This Is
 
-A lightweight, self-hosted project tracker: FastAPI plus SQLite, one
-container, port 9280. Kanban boards with drag-and-drop cards, a Today's
+**SQ** (short for Squirrel, a joke about chasing shiny new projects) is a
+lightweight, self-hosted project tracker: FastAPI plus SQLite, one
+container, port 9280. The brand is SQ and the voice is cheeky (squirrel
+jokes, gentle guilt); **internal identifiers stay `projecttracker`** (the
+repo name, container name, image tag, and the `/health` `app` field), the
+same lesson as PantryRaider's foodassistant plumbing: renaming them breaks
+deployments for no user benefit. Kanban boards with drag-and-drop cards, a Today's
 Tasks list that feeds wall displays (`/display` for a Raspberry Pi
 browser, `/api/display` compact JSON for an ESP32), and optional LLM
 assist (Gemini default; Anthropic, OpenAI, Ollama). Single user for now;

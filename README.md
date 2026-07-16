@@ -1,8 +1,11 @@
-# Project Tracker
+# SQ &#128063;
 
-A lightweight, self-hosted project tracker: drag-and-drop cards on a kanban
-board, a Today's Tasks list, and status displays for a wall screen or an
-ESP32. One Python service, one SQLite file, no accounts to create.
+**SQ** (short for Squirrel) is a lightweight, self-hosted project tracker
+for people with seventeen projects and one attention span. Drag-and-drop
+cards on a kanban board, a Today's Tasks list, wall displays, and a
+built-in conscience: SQ remembers every project you started and nags you
+(kindly) before you chase the next shiny thing. One Python service, one
+SQLite file, no accounts to create.
 
 ## Features
 
@@ -17,6 +20,10 @@ ESP32. One Python service, one SQLite file, no accounts to create.
 - **Today's Tasks**: drag any card onto the Today rail and it appears on
   your wall displays. Cards that reach a done column can be cleared from
   the list in one click.
+- **Squirrel discipline**: every project is Chasing, Buried for later, or
+  Cracked (done). Starting a new project while others sit unfinished gets
+  you a gentle "SQUIRREL!" listing what you're abandoning, and boards nudge
+  you about the stalest open project. Mark it Buried and SQ stops judging.
 - **Calendar**: a month view of everything with a due date, across all
   projects or a filtered set. Overdue cards stand out; finished ones are
   crossed off.

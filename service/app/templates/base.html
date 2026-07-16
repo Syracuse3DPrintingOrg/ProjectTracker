@@ -8,7 +8,7 @@
 </head>
 <body>
 <nav class="topnav">
-  <a class="brand" href="/">{{ app_title }}</a>
+  <a class="brand" href="/" title="SQ: squirrel-brained project tracking">&#128063; {{ app_title }}</a>
   <div class="nav-pills">
     <a class="pill" href="/">Boards</a>
     <a class="pill" href="/today">Today</a>
@@ -38,7 +38,7 @@
 <main class="page">
 {% block content %}{% endblock %}
 </main>
-<footer class="footer">Project Tracker v{{ version }}</footer>
+<footer class="footer">{{ app_title }} v{{ version }} &middot; easily distracted, reliably tracked &#128063;</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

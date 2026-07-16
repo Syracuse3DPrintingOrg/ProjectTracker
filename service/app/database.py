@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS projects (
     position INTEGER NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
     claude_path TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS columns (
@@ -70,4 +71,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "claude_path" not in project_cols:
         conn.execute(
             "ALTER TABLE projects ADD COLUMN claude_path TEXT NOT NULL DEFAULT ''"
+        )
+    if "status" not in project_cols:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
         )

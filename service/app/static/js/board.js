@@ -364,12 +364,66 @@
     window.location.href = `/project/${e.target.value}`;
   });
 
+  /* ---- squirrel discipline ---- */
+
+  const NUDGE_LINES = [
+    (p) => `Psst. "${p.name}" has ${p.open_cards} open card${p.open_cards > 1 ? "s" : ""} and hasn't moved in ${p.days_quiet} days. It misses you.`,
+    (p) => `Remember "${p.name}"? ${p.open_cards} card${p.open_cards > 1 ? "s" : ""} still open, ${p.days_quiet} days of silence. Just saying.`,
+    (p) => `That nut you buried, "${p.name}"? Still in the ground. ${p.open_cards} open card${p.open_cards > 1 ? "s" : ""}, quiet for ${p.days_quiet} days.`,
+    (p) => `"${p.name}" called. It wants its ${p.open_cards} open card${p.open_cards > 1 ? "s" : ""} finished. (${p.days_quiet} days and counting.)`,
+  ];
+
+  async function squirrelNudge() {
+    try {
+      const stale = (await api(`/api/nudge?exclude=${projectId}`))
+        .filter(p => p.days_quiet >= 3);
+      if (!stale.length) return;
+      const p = stale[0];
+      if (sessionStorage.getItem("nudge-dismissed") === String(p.id)) return;
+      const line = NUDGE_LINES[p.id % NUDGE_LINES.length](p);
+      document.getElementById("nudge-text").innerHTML =
+        `${line} <a href="/project/${p.id}">Go finish it</a>`;
+      document.getElementById("squirrel-nudge").hidden = false;
+      document.getElementById("nudge-dismiss").onclick = () => {
+        sessionStorage.setItem("nudge-dismissed", String(p.id));
+        document.getElementById("squirrel-nudge").hidden = true;
+      };
+    } catch (e) { /* no guilt today */ }
+  }
+
   document.getElementById("new-project").addEventListener("click", async () => {
+    try {
+      const unfinished = await api("/api/nudge");
+      if (unfinished.length) {
+        const top = unfinished.slice(0, 3)
+          .map(p => `  - ${p.name}: ${p.open_cards} open, quiet ${p.days_quiet}d`)
+          .join("\n");
+        const total = unfinished.reduce((n, p) => n + p.open_cards, 0);
+        if (!confirm(
+          `SQUIRREL! \u{1F43F}️\n\nEasy there. ${unfinished.length} project${unfinished.length > 1 ? "s" : ""} still ` +
+          `${unfinished.length > 1 ? "have" : "has"} nuts in the ground (${total} open cards):\n\n${top}\n\n` +
+          `Chase the new shiny thing anyway?`
+        )) return;
+      }
+    } catch (e) { /* the nudge never blocks the work */ }
     const name = prompt("Project name:");
     if (!name || !name.trim()) return;
     try {
       const p = await api("/api/projects", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
       window.location.href = `/project/${p.id}`;
+    } catch (err) { alert(err.message); }
+  });
+
+  document.getElementById("project-status").addEventListener("change", async (e) => {
+    try {
+      await api(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: e.target.value }),
+      });
+      if (e.target.value === "cracked") {
+        alert("\u{1F43F}️ Cracked it. Go start something new, guilt-free.");
+      }
+      window.location.reload();
     } catch (err) { alert(err.message); }
   });
 
@@ -454,4 +508,5 @@
   document.querySelectorAll("#board .card").forEach(renderMeta);
   updateCounts();
   refreshToday();
+  squirrelNudge();
 })();

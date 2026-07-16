@@ -9,6 +9,10 @@ from .. import database
 
 DEFAULT_COLUMNS = ["Backlog", "To Do", "In Progress", "Done"]
 
+# Project statuses, squirrel edition: chasing it now, buried for later,
+# or cracked open and finished.
+PROJECT_STATUSES = ("active", "buried", "cracked")
+
 
 def _rows(cur) -> list[dict]:
     return [dict(r) for r in cur.fetchall()]
@@ -55,6 +59,41 @@ def create_project(name: str, columns: list[str] | None = None) -> dict:
 def rename_project(project_id: int, name: str) -> None:
     with database.connect() as conn:
         conn.execute("UPDATE projects SET name = ? WHERE id = ?", (name, project_id))
+
+
+def set_project_status(project_id: int, status: str) -> None:
+    if status not in PROJECT_STATUSES:
+        raise ValueError(f"unknown status: {status}")
+    with database.connect() as conn:
+        conn.execute(
+            "UPDATE projects SET status = ? WHERE id = ?", (status, project_id)
+        )
+
+
+def nudge_data(exclude_project_id: int | None = None) -> list[dict]:
+    """The guilt list: active projects with open cards, stalest first.
+
+    Open means the card sits in a column not flagged done. Quiet days
+    count from the newest card update in the project (or the project's
+    creation when it has no cards)."""
+    sql = (
+        "SELECT projects.id, projects.name,"
+        " COUNT(cards.id) AS open_cards,"
+        " CAST(julianday('now') - julianday(COALESCE(MAX(cards.updated_at),"
+        "   projects.created_at)) AS INTEGER) AS days_quiet"
+        " FROM projects"
+        " LEFT JOIN cards ON cards.project_id = projects.id"
+        "   AND cards.column_id IN (SELECT id FROM columns WHERE is_done = 0)"
+        " WHERE projects.archived = 0 AND projects.status = 'active'"
+    )
+    args: list = []
+    if exclude_project_id:
+        sql += " AND projects.id != ?"
+        args.append(exclude_project_id)
+    sql += " GROUP BY projects.id HAVING open_cards > 0"
+    sql += " ORDER BY days_quiet DESC, open_cards DESC"
+    with database.connect() as conn:
+        return _rows(conn.execute(sql, args))
 
 
 def set_claude_link(project_id: int, claude_path: str) -> None:
@@ -306,11 +345,15 @@ def import_data(data: dict) -> dict:
         conn.execute("DELETE FROM columns")
         conn.execute("DELETE FROM projects")
         for p in projects:
+            status = p.get("status", "active")
             conn.execute(
-                "INSERT INTO projects (id, name, position, archived, created_at)"
-                " VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')))",
+                "INSERT INTO projects (id, name, position, archived, claude_path,"
+                " status, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
                 (p.get("id"), p.get("name", "Project"), p.get("position", 0),
-                 p.get("archived", 0), p.get("created_at")),
+                 p.get("archived", 0), p.get("claude_path", ""),
+                 status if status in PROJECT_STATUSES else "active",
+                 p.get("created_at")),
             )
         for c in columns:
             conn.execute(

@@ -1,21 +1,27 @@
 :root {
-  --bg: #14161a;
-  --surface: #1d2026;
-  --surface-2: #262a32;
-  --border: #343945;
-  --text: #e8eaf0;
-  --muted: #9aa1b0;
-  --accent: #4f8ef7;
-  --danger: #e05561;
-  --ok: #3fb950;
-  --warn: #d29922;
+  --bg: #0a0c12;
+  --surface: #12151f;
+  --surface-2: #1a1e2c;
+  --border: #262b3d;
+  --text: #e9ecf5;
+  --muted: #8f97ad;
+  --accent: #7c5cff;
+  --accent-2: #22d3ee;
+  --danger: #ff5470;
+  --ok: #2fe38a;
+  --warn: #ffb224;
+  --glow: 0 0 14px rgba(124, 92, 255, 0.35);
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(124, 92, 255, 0.14), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgba(34, 211, 238, 0.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
@@ -23,17 +29,29 @@ body {
   flex-direction: column;
 }
 
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent-2); text-decoration: none; }
 
 .topnav {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.6rem 1rem;
-  background: var(--surface);
+  background: rgba(18, 21, 31, 0.85);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
-.topnav .brand { font-weight: 700; color: var(--text); font-size: 1.05rem; }
+.topnav .brand {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  background: linear-gradient(100deg, var(--accent) 10%, var(--accent-2) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 .nav-pills { display: flex; gap: 0.4rem; margin-left: 0.6rem; flex-wrap: wrap; }
 .nav-pills .pill {
   color: var(--muted);
@@ -42,8 +60,13 @@ a { color: var(--accent); text-decoration: none; }
   padding: 0.22rem 0.85rem;
   font-size: 0.86rem;
 }
-.nav-pills .pill:hover { color: var(--text); border-color: var(--accent); }
-.nav-pills .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nav-pills .pill:hover { color: var(--text); border-color: var(--accent); box-shadow: var(--glow); }
+.nav-pills .pill.active {
+  background: linear-gradient(100deg, var(--accent), #5b8cff);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--glow);
+}
 .nav-links { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
 .nav-links a { color: var(--muted); }
 .nav-links a:hover { color: var(--text); }
@@ -60,8 +83,12 @@ button, .btn {
   font: inherit;
   cursor: pointer;
 }
-button:hover, .btn:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:hover, .btn:hover { border-color: var(--accent); box-shadow: var(--glow); }
+button.primary {
+  background: linear-gradient(100deg, var(--accent), #5b8cff);
+  border-color: transparent;
+  color: #fff;
+}
 button.danger { color: var(--danger); }
 
 input, textarea, select {
@@ -121,7 +148,9 @@ label { display: block; margin: 0.6rem 0 0.2rem; color: var(--muted); font-size:
   padding: 0.5rem 0.6rem;
   margin-bottom: 0.45rem;
   cursor: grab;
+  transition: border-color 0.15s, transform 0.15s;
 }
+.card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .card:active { cursor: grabbing; }
 .card .card-title { font-size: 0.92rem; }
 .card .meta { display: flex; gap: 0.4rem; margin-top: 0.35rem; flex-wrap: wrap; align-items: center; }
@@ -291,6 +320,21 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   margin-bottom: 0.9rem;
 }
 .dash-needs h2 { font-size: 1rem; margin: 0 0 0.2rem; color: var(--warn); }
+
+/* squirrel nudge */
+.nudge {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  background: linear-gradient(100deg, rgba(255, 178, 36, 0.12), rgba(124, 92, 255, 0.10));
+  border: 1px solid var(--warn);
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+.nudge .dismiss { margin-left: auto; cursor: pointer; color: var(--muted); background: none; border: none; }
+.status-chip { font-size: 0.85rem; }
 
 /* simple pages */
 .panel {

@@ -12,6 +12,11 @@ class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    status: str | None = None
+
+
 class ColumnIn(BaseModel):
     name: str = Field(min_length=1, max_length=100)
 
@@ -75,11 +80,22 @@ def create_project(body: ProjectIn):
 
 
 @router.patch("/projects/{project_id}")
-def rename_project(project_id: int, body: ProjectIn):
+def update_project(project_id: int, body: ProjectUpdate):
     if not store.get_project(project_id):
         raise HTTPException(404)
-    store.rename_project(project_id, body.name.strip())
+    if body.name is not None:
+        store.rename_project(project_id, body.name.strip())
+    if body.status is not None:
+        if body.status not in store.PROJECT_STATUSES:
+            raise HTTPException(422, f"status must be one of {store.PROJECT_STATUSES}")
+        store.set_project_status(project_id, body.status)
     return store.get_project(project_id)
+
+
+@router.get("/nudge")
+def nudge(exclude: int | None = None):
+    """Active projects with open cards, stalest first. The guilt trip API."""
+    return store.nudge_data(exclude)
 
 
 @router.post("/projects/{project_id}/archive")
