@@ -14,8 +14,9 @@ same lesson as PantryRaider's foodassistant plumbing: renaming them breaks
 deployments for no user benefit. Kanban boards with drag-and-drop cards, a Today's
 Tasks list that feeds wall displays (`/display` for a Raspberry Pi
 browser, `/api/display` compact JSON for an ESP32), and optional LLM
-assist (Gemini default; Anthropic, OpenAI, Ollama). Single user for now;
-a second user is planned later.
+assist (Gemini default; Anthropic, OpenAI, Ollama). Multi-user with three
+roles (admin, member, viewer) behind optional logins; boards and the
+Today list are shared by everyone on the instance.
 
 ## Repository Map
 
@@ -96,7 +97,9 @@ CHANGELOG entry (see Versioning).
   Do not wait to be asked. The one exception is small conversational
   tweaks Dan asks for while just chatting, which may be left uncommitted
   for his review unless he says ship it.
-- Track follow-up work as GitHub issues in this repo.
+- Track follow-up work in beads (`bd create`, prefix `SQ`); the beads
+  section below has the workflow. GitHub issues are for outside
+  reporters, not our own tracking.
 
 ## Non-Interactive Shell Commands
 
