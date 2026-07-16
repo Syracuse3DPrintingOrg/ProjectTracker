@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Settings</h1>
+
+  <h2 style="font-size: 1rem;">AI assist</h2>
+  <p class="muted">Used for the card assist buttons (break into subtasks, draft a description). Gemini is the default; a saved key stays put when the field is left blank.</p>
+  <form id="llm-form">
+    <label>Provider</label>
+    <select name="llm_provider">
+      {% for p in providers %}
+      <option value="{{ p }}" {% if settings.llm_provider == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+    <label>Gemini API key {% if has_keys.gemini %}<span class="muted">(saved)</span>{% endif %}</label>
+    <input name="gemini_api_key" type="password" placeholder="{% if has_keys.gemini %}leave blank to keep{% endif %}" autocomplete="off">
+    <label>Anthropic API key {% if has_keys.anthropic %}<span class="muted">(saved)</span>{% endif %}</label>
+    <input name="anthropic_api_key" type="password" placeholder="{% if has_keys.anthropic %}leave blank to keep{% endif %}" autocomplete="off">
+    <label>OpenAI API key {% if has_keys.openai %}<span class="muted">(saved)</span>{% endif %}</label>
+    <input name="openai_api_key" type="password" placeholder="{% if has_keys.openai %}leave blank to keep{% endif %}" autocomplete="off">
+    <label>Ollama URL</label>
+    <input name="ollama_url" value="{{ settings.ollama_url }}" autocomplete="off">
+    <label>Model <span class="muted">(blank uses the provider default, currently {{ default_model }})</span></label>
+    <input name="llm_model" value="{{ settings.llm_model }}" autocomplete="off">
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Save AI settings</button>
+      <button type="button" id="test-llm">Test</button>
+      <span class="assist-note" id="llm-note"></span>
+    </div>
+  </form>
+
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">General</h2>
+  <form id="general-form">
+    <label>App title</label>
+    <input name="app_title" value="{{ settings.app_title }}" autocomplete="off">
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Save</button>
+      <span class="assist-note" id="general-note"></span>
+    </div>
+  </form>
+
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Access</h2>
+  <p class="muted">With no password set, the app is open to anyone on your network. Set one if this box is reachable from outside your LAN.</p>
+  <form id="access-form">
+    <label>New password <span class="muted">(blank keeps the current one)</span></label>
+    <input name="password" type="password" autocomplete="new-password">
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Save password</button>
+      {% if settings.password_hash %}
+      <button type="button" id="clear-password" class="danger">Remove password</button>
+      {% endif %}
+      <span class="assist-note" id="access-note"></span>
+    </div>
+  </form>
+
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Wall displays</h2>
+  <p class="muted">When a password is set, displays authenticate with a token instead:
+    <code>/display?token=&hellip;</code> and <code>/api/display?token=&hellip;</code>.</p>
+  <p>Current token: <code id="display-token">{{ settings.display_token or "none" }}</code></p>
+  <div class="dialog-actions">
+    <button type="button" id="rotate-token">Generate new token</button>
+    <button type="button" id="clear-token" class="danger">Remove token</button>
+    <span class="assist-note" id="token-note"></span>
+  </div>
+</div>
+
+<script src="/static/js/settings.js"></script>
+{% endblock %}

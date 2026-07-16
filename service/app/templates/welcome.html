@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h1>Welcome</h1>
+  <p>Create your first project to get a board with Backlog, To Do, In Progress, and Done columns. You can rename or add statuses later.</p>
+  <form id="first-project">
+    <label>Project name</label>
+    <input name="name" required maxlength="200" autocomplete="off" autofocus>
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Create project</button>
+    </div>
+  </form>
+</div>
+<script>
+  document.getElementById("first-project").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = e.target.name.value.trim();
+    if (!name) return;
+    const resp = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (resp.ok) {
+      const p = await resp.json();
+      window.location.href = `/project/${p.id}`;
+    } else {
+      alert("Could not create the project.");
+    }
+  });
+</script>
+{% endblock %}

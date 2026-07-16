@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Today's Tasks</title>
+  <style>
+    :root { --bg: #0d0f12; --text: #e8eaf0; --muted: #8b93a3; --ok: #3fb950; --warn: #d29922; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 3.2vh/1.35 system-ui, sans-serif;
+      min-height: 100vh; padding: 3vh 4vw;
+    }
+    h1 { font-size: 4.2vh; margin: 0 0 1vh; }
+    .sub { color: var(--muted); font-size: 2.4vh; margin-bottom: 2.5vh; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; gap: 1.2vw; padding: 1.4vh 0; border-bottom: 1px solid #21252c; align-items: baseline; }
+    li .box { color: var(--muted); }
+    li.done { opacity: 0.45; }
+    li.done .title { text-decoration: line-through; }
+    li.done .box { color: var(--ok); }
+    .proj { color: var(--muted); font-size: 2.3vh; margin-left: auto; white-space: nowrap; }
+    .due { color: var(--warn); font-size: 2.3vh; white-space: nowrap; }
+    .empty { color: var(--muted); margin-top: 6vh; text-align: center; font-size: 3.5vh; }
+    .offline { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <h1>Today's Tasks</h1>
+  <div class="sub" id="sub">Loading&hellip;</div>
+  <ul id="tasks"></ul>
+  <div class="empty" id="empty" hidden>Nothing on the list. Enjoy the slack.</div>
+  <script>
+    const token = new URLSearchParams(window.location.search).get("token");
+    const url = "/api/display" + (token ? "?token=" + encodeURIComponent(token) : "");
+    function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+    async function refresh() {
+      const sub = document.getElementById("sub");
+      try {
+        const data = await (await fetch(url)).json();
+        const list = document.getElementById("tasks");
+        list.innerHTML = data.tasks.map(t =>
+          `<li class="${t.done ? "done" : ""}">` +
+          `<span class="box">${t.done ? "✓" : "▢"}</span>` +
+          `<span class="title">${esc(t.title)}</span>` +
+          (t.due ? `<span class="due">${esc(t.due)}</span>` : "") +
+          `<span class="proj">${esc(t.project)}</span></li>`
+        ).join("");
+        document.getElementById("empty").hidden = data.tasks.length > 0;
+        sub.textContent = `${data.remaining} of ${data.count} remaining`;
+        sub.classList.remove("offline");
+      } catch (e) {
+        sub.textContent = "Connection lost, retrying…";
+        sub.classList.add("offline");
+      }
+    }
+    refresh();
+    setInterval(refresh, 15000);
+  </script>
+</body>
+</html>

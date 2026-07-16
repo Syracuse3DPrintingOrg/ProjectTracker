@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_title }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<nav class="topnav">
+  <a class="brand" href="/">{{ app_title }}</a>
+  <div class="nav-links">
+    {% block nav %}{% endblock %}
+    <a href="/today">Today</a>
+    <a href="/settings">Settings</a>
+    {% if auth_required %}<a href="/logout">Log out</a>{% endif %}
+  </div>
+</nav>
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+<footer class="footer">Project Tracker v{{ version }}</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,13 @@
+services:
+  tracker:
+    build: .
+    container_name: projecttracker
+    ports:
+      - "9280:9280"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    # Uncomment to configure by environment instead of the Settings page:
+    # environment:
+    #   GEMINI_API_KEY: ""
+    #   TRACKER_LLM_PROVIDER: gemini

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Today · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Today's Tasks</h1>
+  {% if tasks %}
+  <ul class="list-plain">
+    {% for t in tasks %}
+    <li>
+      <span>{% if t.done %}&#10003;{% else %}&#9633;{% endif %}</span>
+      <span {% if t.done %}style="text-decoration: line-through; opacity: 0.6;"{% endif %}>{{ t.title }}</span>
+      <span class="muted">{{ t.project_name }} · {{ t.status }}</span>
+      {% if t.due_date %}<span class="chip due">{{ t.due_date }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing planned yet. Drag cards onto the Today's Tasks rail on any board.</p>
+  {% endif %}
+  <p class="muted">Wall displays show this list: point a browser at <code>/display</code>, or poll <code>/api/display</code> from an ESP32.</p>
+</div>
+{% endblock %}

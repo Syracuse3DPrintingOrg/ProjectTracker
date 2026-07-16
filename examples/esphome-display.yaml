@@ -1,0 +1,82 @@
+# Example: Today's Tasks on a LILYGO T-Display (ESP32, ST7789 135x240).
+# Point base_url at your tracker. If you set a password in the app,
+# generate a display token on the Settings page and add it below.
+#
+# The /api/display payload is small on purpose:
+#   {"count": 3, "remaining": 2, "tasks": [{"title": "...", "done": false, ...}]}
+
+substitutions:
+  base_url: "http://192.168.1.50:9280"
+  display_token: ""   # from Settings > Wall displays, blank if no password set
+
+esphome:
+  name: tracker-display
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+http_request:
+  useragent: tracker-display
+  timeout: 10s
+
+globals:
+  - id: tasks_text
+    type: std::string
+    initial_value: '"loading..."'
+  - id: remaining
+    type: int
+    initial_value: "0"
+
+interval:
+  - interval: 30s
+    then:
+      - http_request.get:
+          url: "${base_url}/api/display?token=${display_token}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  DynamicJsonDocument doc(8192);
+                  if (deserializeJson(doc, body) != DeserializationError::Ok) return;
+                  id(remaining) = doc["remaining"] | 0;
+                  std::string out;
+                  for (JsonObject t : doc["tasks"].as<JsonArray>()) {
+                    out += (t["done"] | false) ? "[x] " : "[ ] ";
+                    out += (const char*)(t["title"] | "");
+                    out += "\n";
+                  }
+                  id(tasks_text) = out.empty() ? "Nothing today" : out;
+
+spi:
+  clk_pin: 18
+  mosi_pin: 19
+
+display:
+  - platform: ili9xxx
+    model: st7789v
+    cs_pin: 5
+    dc_pin: 16
+    reset_pin: 23
+    dimensions:
+      width: 135
+      height: 240
+      offset_width: 52
+      offset_height: 40
+    rotation: 90
+    lambda: |-
+      it.printf(4, 2, id(font_big), "Today: %d left", id(remaining));
+      it.print(4, 28, id(font_small), id(tasks_text).c_str());
+
+font:
+  - file: "gfonts://Roboto@700"
+    id: font_big
+    size: 18
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 13
