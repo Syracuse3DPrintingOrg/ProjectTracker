@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-16
+
+### Added
+
+- **Every chat on the Claude Code dashboard.** Repo cards now list each
+  chat by name (the title you gave it, or its generated name) with its
+  branch, state, and how long ago it was active. Chats waiting on you
+  show Claude's last message, so you can tell what the question is
+  without switching windows.
+- **Needs input floats to the top.** A highlighted section above the
+  machine cards collects every chat that is waiting for input, across
+  all machines, most recent first.
+
 ## [0.4.0] - 2026-07-16
 
 ### Added

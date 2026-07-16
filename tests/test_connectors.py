@@ -171,6 +171,39 @@ def test_summarize_beads():
     assert connector_script.summarize_beads([]) is None
 
 
+def test_session_details_extraction(tmp_path):
+    f = tmp_path / "t.jsonl"
+    f.write_text(
+        '{"type": "custom-title", "customTitle": "old name"}\n'
+        '{"type": "user", "cwd": "/repo", "gitBranch": "main", "slug": "jolly-fox"}\n'
+        '{"type": "assistant", "message": {"content": [{"type": "text", "text": "Should I  push?"}]}}\n'
+        '{"type": "custom-title", "customTitle": "renamed"}\n'
+    )
+    d = connector_script.session_details(f)
+    assert d["title"] == "renamed"  # the newest rename wins
+    assert d["branch"] == "main"
+    assert d["snippet"] == "Should I push?"  # whitespace collapsed
+
+    slug_only = tmp_path / "s.jsonl"
+    slug_only.write_text('{"type": "user", "slug": "jolly-fox", "cwd": "/x"}\n')
+    assert connector_script.session_details(slug_only)["title"] == "jolly fox"
+
+
+def test_snapshot_keeps_chat_fields(temp_data_dir):
+    connectors.store_snapshot("devbox", [{
+        "path": "/x",
+        "sessions": [{
+            "state": "waiting", "age_seconds": 60,
+            "title": "fix the flaky test", "branch": "main",
+            "snippet": "Want me to also update the CI config?",
+        }],
+    }])
+    s = connectors.snapshots()[0]["projects"][0]["sessions"][0]
+    assert s["title"] == "fix the flaky test"
+    assert s["branch"] == "main"
+    assert s["snippet"].startswith("Want me")
+
+
 def test_last_message_type_skips_metadata(tmp_path):
     f = tmp_path / "t.jsonl"
     f.write_text(

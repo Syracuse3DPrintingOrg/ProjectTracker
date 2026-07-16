@@ -21,22 +21,25 @@
     return '<span class="chip">idle</span>';
   }
 
+  function chatLine(s, withProject) {
+    const name = s.title || "untitled chat";
+    let html = `<div class="dash-chat ${s.state}">`;
+    html += stateBadge(s.state);
+    html += `<span class="dash-chat-title">${esc(name)}</span>`;
+    if (s.branch) html += `<span class="chip">${esc(s.branch)}</span>`;
+    if (withProject) html += `<span class="muted">${esc(withProject)}</span>`;
+    html += `<span class="muted" style="margin-left: auto; white-space: nowrap;">${ago(s.age_seconds)}</span>`;
+    html += `</div>`;
+    if (s.snippet) html += `<div class="dash-snippet">${esc(s.snippet)}</div>`;
+    return html;
+  }
+
   function projectCard(p) {
     const sessions = p.sessions || [];
-    const working = sessions.filter(s => s.state === "working").length;
-    const waiting = sessions.filter(s => s.state === "waiting").length;
     let html = `<div class="dash-card ${p.state}">`;
     html += `<div class="dash-card-head"><strong>${esc(p.name)}</strong>${stateBadge(p.state)}</div>`;
     html += `<div class="muted dash-path">${esc(p.path)}</div>`;
-    if (sessions.length) {
-      const bits = [];
-      if (waiting) bits.push(waiting + " waiting for input");
-      if (working) bits.push(working + " working");
-      const idle = sessions.length - working - waiting;
-      if (idle) bits.push(idle + " idle");
-      const freshest = Math.min(...sessions.map(s => s.age_seconds));
-      html += `<div class="dash-line">${sessions.length} session${sessions.length > 1 ? "s" : ""}: ${bits.join(", ")} · last activity ${ago(freshest)}</div>`;
-    }
+    sessions.forEach(s => { html += chatLine(s, ""); });
     if (p.beads) {
       const b = p.beads;
       html += `<div class="dash-line">beads: ${b.in_progress} in progress, ${b.open} open${b.blocked ? ", " + b.blocked + " blocked" : ""}</div>`;
@@ -65,6 +68,20 @@
     }
     const machines = data.machines || [];
     document.getElementById("dash-empty").hidden = machines.length > 0;
+
+    // Chats waiting for input float to the top, across every machine.
+    const waiting = [];
+    machines.forEach(m => (m.projects || []).forEach(p =>
+      (p.sessions || []).forEach(s => {
+        if (s.state === "waiting") waiting.push({ s, where: p.name + (machines.length > 1 ? " on " + m.machine : "") });
+      })
+    ));
+    waiting.sort((a, b) => a.s.age_seconds - b.s.age_seconds);
+    const needs = document.getElementById("dash-needs-input");
+    needs.hidden = waiting.length === 0;
+    needs.innerHTML = `<h2>Needs input (${waiting.length})</h2>` +
+      waiting.map(w => chatLine(w.s, w.where)).join("");
+
     grid.innerHTML = machines.map(m => {
       const order = { waiting: 0, working: 1, idle: 2 };
       const projects = (m.projects || []).slice().sort((a, b) => order[a.state] - order[b.state]);

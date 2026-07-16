@@ -65,12 +65,15 @@ def _clean_project(p: dict) -> dict:
             age = int(s.get("age_seconds") or 0)
         except (TypeError, ValueError):
             age = 0
-        sessions.append(
-            {
-                "state": state if state in SESSION_STATES else "idle",
-                "age_seconds": age,
-            }
-        )
+        session = {
+            "state": state if state in SESSION_STATES else "idle",
+            "age_seconds": age,
+            "title": str(s.get("title") or "")[:120],
+            "branch": str(s.get("branch") or "")[:80],
+        }
+        if s.get("snippet"):
+            session["snippet"] = str(s["snippet"])[:300]
+        sessions.append(session)
     beads = p.get("beads") if isinstance(p.get("beads"), dict) else None
     clean = {
         "path": str(p.get("path") or "")[:500],

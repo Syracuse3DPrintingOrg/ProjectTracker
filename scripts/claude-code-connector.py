@@ -73,6 +73,84 @@ def last_message_type(path: Path) -> str:
     return ""
 
 
+def _iter_json(lines) -> list[dict]:
+    out = []
+    for raw in lines:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            entry = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(entry, dict):
+            out.append(entry)
+    return out
+
+
+def session_details(path: Path, max_lines: int = 80) -> dict:
+    """Title, branch, and last-assistant snippet for one chat.
+
+    The title prefers the user's custom title (renames land near the end
+    of the transcript, so the tail wins), then the generated slug. The
+    snippet is the newest assistant text, so a chat that is waiting shows
+    what Claude last said."""
+    head = []
+    try:
+        with open(path, "r", errors="replace") as f:
+            for _ in range(max_lines):
+                line = f.readline()
+                if not line:
+                    break
+                head.append(line)
+    except OSError:
+        pass
+    tail_entries = _iter_json(_tail_lines(path))
+    head_entries = _iter_json(head)
+
+    title = ""
+    for entry in reversed(tail_entries):
+        if entry.get("type") == "custom-title" and entry.get("customTitle"):
+            title = str(entry["customTitle"])
+            break
+    if not title:
+        for entry in head_entries:
+            if entry.get("type") == "custom-title" and entry.get("customTitle"):
+                title = str(entry["customTitle"])
+                break
+    if not title:
+        for entry in tail_entries + head_entries:
+            if entry.get("slug"):
+                title = str(entry["slug"]).replace("-", " ")
+                break
+
+    branch = ""
+    for entry in reversed(tail_entries):
+        if entry.get("gitBranch"):
+            branch = str(entry["gitBranch"])
+            break
+
+    snippet = ""
+    for entry in reversed(tail_entries):
+        if entry.get("type") != "assistant":
+            continue
+        content = (entry.get("message") or {}).get("content")
+        if isinstance(content, str):
+            snippet = content
+        elif isinstance(content, list):
+            snippet = " ".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ).strip()
+        if snippet:
+            break
+    snippet = " ".join(snippet.split())
+    if len(snippet) > 220:
+        snippet = snippet[:217] + "..."
+
+    return {"title": title[:120], "branch": branch[:80], "snippet": snippet}
+
+
 def find_cwd(path: Path, max_lines: int = 80) -> str:
     """The session's working directory. Early transcript lines are
     metadata without a cwd, so scan forward a bit, then fall back to the
@@ -156,12 +234,16 @@ def scan(days: int) -> list[dict]:
                 continue
             age = max(0, time.time() - mtime)
             last_type = last_message_type(transcript)
+            state = session_state(age, last_type)
+            session = {"state": state, "age_seconds": int(age)}
+            session.update(session_details(transcript))
+            if state != "waiting":
+                session.pop("snippet", None)
             repo = repos.setdefault(cwd, {"path": cwd, "sessions": []})
-            repo["sessions"].append(
-                {"state": session_state(age, last_type), "age_seconds": int(age)}
-            )
+            repo["sessions"].append(session)
+    order = {"waiting": 0, "working": 1, "idle": 2}
     for repo in repos.values():
-        repo["sessions"].sort(key=lambda s: s["age_seconds"])
+        repo["sessions"].sort(key=lambda s: (order[s["state"]], s["age_seconds"]))
         repo["sessions"] = repo["sessions"][:10]
         repo["name"] = os.path.basename(repo["path"])
         beads_file = Path(repo["path"]) / ".beads" / "issues.jsonl"
