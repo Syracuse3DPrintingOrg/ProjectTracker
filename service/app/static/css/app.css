@@ -34,6 +34,16 @@ a { color: var(--accent); text-decoration: none; }
   border-bottom: 1px solid var(--border);
 }
 .topnav .brand { font-weight: 700; color: var(--text); font-size: 1.05rem; }
+.nav-pills { display: flex; gap: 0.4rem; margin-left: 0.6rem; flex-wrap: wrap; }
+.nav-pills .pill {
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.22rem 0.85rem;
+  font-size: 0.86rem;
+}
+.nav-pills .pill:hover { color: var(--text); border-color: var(--accent); }
+.nav-pills .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 .nav-links { margin-left: auto; display: flex; gap: 1rem; align-items: center; }
 .nav-links a { color: var(--muted); }
 .nav-links a:hover { color: var(--text); }
@@ -238,6 +248,24 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 }
 .cal-filter-menu label { margin: 0.25rem 0; display: flex; gap: 0.45rem; align-items: center; color: var(--text); }
 .cal-filter-menu input { width: auto; }
+
+/* claude code dashboard */
+.dash-machine h2 { font-size: 1rem; margin: 1rem 0 0.5rem; }
+.dash-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 0.7rem; }
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+.dash-card.waiting { border-color: var(--warn); }
+.dash-card.working { border-color: var(--accent); }
+.dash-card-head { display: flex; align-items: center; gap: 0.5rem; justify-content: space-between; }
+.dash-path { font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-line { font-size: 0.83rem; margin-top: 0.4rem; color: var(--text); }
+.dash-bead { font-size: 0.78rem; color: var(--muted); margin: 0.15rem 0 0 0.4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.state-waiting { color: #fff; background: var(--warn); border-color: var(--warn); }
+.chip.state-working { color: #fff; background: var(--accent); border-color: var(--accent); }
 
 /* simple pages */
 .panel {

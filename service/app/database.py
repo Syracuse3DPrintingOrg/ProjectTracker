@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
+    claude_path TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS columns (
@@ -60,3 +61,13 @@ def connect() -> sqlite3.Connection:
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive migrations for databases created by older versions."""
+    project_cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)")}
+    if "claude_path" not in project_cols:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN claude_path TEXT NOT NULL DEFAULT ''"
+        )

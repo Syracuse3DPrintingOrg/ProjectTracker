@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.0"
 APP_NAME = "Project Tracker"
 
 DATA_DIR = Path(os.environ.get("TRACKER_DATA_DIR", "data"))
@@ -24,6 +24,7 @@ _SAVEABLE = {
     "llm_model",
     "password_hash",
     "display_token",
+    "connector_token",
     "app_title",
     "base_url",
     "displays",
@@ -38,6 +39,7 @@ _DEFAULTS = {
     "llm_model": "",
     "password_hash": "",
     "display_token": "",
+    "connector_token": "",
     "app_title": APP_NAME,
     "base_url": "",
     "displays": [],
@@ -53,6 +55,7 @@ _ENV_MAP = {
     "llm_model": "TRACKER_LLM_MODEL",
     "password_hash": "TRACKER_PASSWORD_HASH",
     "display_token": "TRACKER_DISPLAY_TOKEN",
+    "connector_token": "TRACKER_CONNECTOR_TOKEN",
     "app_title": "TRACKER_TITLE",
     "base_url": "TRACKER_BASE_URL",
 }

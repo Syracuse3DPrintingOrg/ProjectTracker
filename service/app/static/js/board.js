@@ -397,6 +397,48 @@
     } catch (err) { alert(err.message); }
   });
 
+  /* ---- Claude Code connect ---- */
+
+  const claudeDialog = document.getElementById("claude-dialog");
+  const claudeForm = document.getElementById("claude-form");
+
+  document.getElementById("claude-connect").addEventListener("click", async () => {
+    try {
+      const data = await api("/api/connectors/claude-code");
+      const select = claudeForm.claude_path;
+      select.innerHTML = '<option value="">(disconnect)</option>';
+      (data.known_paths || []).forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.path;
+        opt.textContent = `${p.name} (${p.machine})`;
+        select.appendChild(opt);
+      });
+      if (window.BOARD.claudePath) {
+        if (![...select.options].some(o => o.value === window.BOARD.claudePath)) {
+          const opt = document.createElement("option");
+          opt.value = window.BOARD.claudePath;
+          opt.textContent = window.BOARD.claudePath + " (not reporting)";
+          select.appendChild(opt);
+        }
+        select.value = window.BOARD.claudePath;
+      }
+      claudeDialog.showModal();
+    } catch (err) { alert(err.message); }
+  });
+
+  document.getElementById("claude-cancel").addEventListener("click", () => claudeDialog.close());
+
+  claudeForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/api/projects/${projectId}/claude-link`, {
+        method: "POST",
+        body: JSON.stringify({ claude_path: claudeForm.claude_path.value }),
+      });
+      window.location.reload();
+    } catch (err) { alert("Connect failed: " + err.message); }
+  });
+
   /* ---- quick filter ---- */
 
   document.getElementById("quick-filter").addEventListener("input", (e) => {

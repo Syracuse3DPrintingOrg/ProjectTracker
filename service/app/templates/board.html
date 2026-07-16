@@ -10,6 +10,13 @@
   <button id="new-project">New project</button>
   <button id="rename-project">Rename</button>
   <button id="archive-project" class="danger">Archive</button>
+  <button id="claude-connect" title="Claude Code">
+    {%- if project.claude_path -%}
+      Claude: {% if claude_status %}{{ claude_status.state }}{% else %}no report{% endif %}
+    {%- else -%}
+      Connect Claude
+    {%- endif -%}
+  </button>
   <input id="quick-filter" placeholder="Filter cards..." autocomplete="off"
          style="width: 180px; margin-left: auto;">
 </div>
@@ -87,11 +94,26 @@
   </form>
 </dialog>
 
+<dialog id="claude-dialog">
+  <form method="dialog" id="claude-form">
+    <p style="margin-top: 0;">Connect this board to a Claude Code repo
+      <span class="muted">(repos appear once the connector reports them)</span>:</p>
+    <select name="claude_path"><option value="">(disconnect)</option></select>
+    <div class="dialog-actions">
+      <button type="submit" class="primary">Save</button>
+      <button type="button" id="claude-cancel">Cancel</button>
+      <span class="spacer"></span>
+      <a href="/dashboard/claude-code">Open dashboard</a>
+    </div>
+  </form>
+</dialog>
+
 <script>
   window.BOARD = {
     projectId: {{ project.id }},
     aiConfigured: {{ 'true' if ai_configured else 'false' }},
-    todayIds: {{ today_ids | tojson }}
+    todayIds: {{ today_ids | tojson }},
+    claudePath: {{ project.claude_path | tojson }}
   };
 </script>
 {% endblock %}

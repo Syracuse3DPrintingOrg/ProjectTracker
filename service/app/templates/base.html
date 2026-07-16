@@ -9,16 +9,32 @@
 <body>
 <nav class="topnav">
   <a class="brand" href="/">{{ app_title }}</a>
+  <div class="nav-pills">
+    <a class="pill" href="/">Boards</a>
+    <a class="pill" href="/today">Today</a>
+    <a class="pill" href="/calendar">Calendar</a>
+    <a class="pill" href="/dashboard/claude-code">Claude Code</a>
+    <a class="pill" href="/displays">Displays</a>
+  </div>
   <div class="nav-links">
     {% block nav %}{% endblock %}
     <a href="/search" title="Search">&#128269;</a>
-    <a href="/today">Today</a>
-    <a href="/calendar">Calendar</a>
-    <a href="/displays">Displays</a>
     <a href="/settings">Settings</a>
     {% if auth_required %}<a href="/logout">Log out</a>{% endif %}
   </div>
 </nav>
+<script>
+  (function () {
+    var path = window.location.pathname;
+    document.querySelectorAll(".nav-pills .pill").forEach(function (a) {
+      var target = a.getAttribute("href");
+      var active = target === "/"
+        ? (path === "/" || path.startsWith("/project/"))
+        : path.startsWith(target);
+      if (active) a.classList.add("active");
+    });
+  })();
+</script>
 <main class="page">
 {% block content %}{% endblock %}
 </main>

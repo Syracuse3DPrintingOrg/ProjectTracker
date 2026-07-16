@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-16
+
+### Added
+
+- **Claude Code dashboard.** A new Claude Code pill in the top menu shows
+  what Claude is doing on your development machines: which repos have
+  active sessions, which are working versus waiting for your input, and
+  each repo's beads issue tracker at a glance (in progress, open,
+  blocked, with the in-progress titles). Repos waiting for input sort
+  first and are highlighted.
+- **The connector.** One small script
+  (`scripts/claude-code-connector.py`, standard library only) runs on
+  each dev machine and posts a status snapshot to the tracker every
+  minute. It reads Claude Code's local session files and each repo's
+  beads export; get the ready-made command, token included, from the
+  dashboard when no machine reports yet. `--install` sets it up as a
+  systemd user service.
+- **Connect boards to repos.** Link a tracker project to a Claude Code
+  repo from its board (the Connect Claude button) or from the dashboard.
+  A linked board shows a live status chip (working, waiting, idle) and
+  the dashboard links straight back to the board.
+
+### Changed
+
+- **The top menu is now pills.** Boards, Today, Calendar, Claude Code,
+  and Displays sit in the top bar as pill buttons with the current page
+  highlighted; search and Settings stay on the right.
+
 ## [0.3.0] - 2026-07-16
 
 ### Added

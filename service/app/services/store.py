@@ -57,6 +57,14 @@ def rename_project(project_id: int, name: str) -> None:
         conn.execute("UPDATE projects SET name = ? WHERE id = ?", (name, project_id))
 
 
+def set_claude_link(project_id: int, claude_path: str) -> None:
+    with database.connect() as conn:
+        conn.execute(
+            "UPDATE projects SET claude_path = ? WHERE id = ?",
+            (claude_path.strip(), project_id),
+        )
+
+
 def archive_project(project_id: int, archived: bool = True) -> None:
     with database.connect() as conn:
         conn.execute(

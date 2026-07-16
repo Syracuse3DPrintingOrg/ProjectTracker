@@ -43,12 +43,20 @@ def project_board(request: Request, project_id: int):
     if not project:
         return RedirectResponse("/", status_code=303)
     settings = config.load_settings()
+    from ..services import connectors
+
+    claude_status = (
+        connectors.project_status(project.get("claude_path", ""))
+        if project.get("claude_path")
+        else None
+    )
     return templates.TemplateResponse(
         request,
         "board.html",
         {
             **_page_context(settings),
             "project": project,
+            "claude_status": claude_status,
             "projects": store.list_projects(),
             "columns": store.list_columns(project_id),
             "cards": store.list_cards(project_id),

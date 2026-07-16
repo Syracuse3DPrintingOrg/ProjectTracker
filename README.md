@@ -44,6 +44,12 @@ ESP32. One Python service, one SQLite file, no accounts to create.
   then authenticate with a token instead of a login.
 - **Backup**: one JSON download from Settings holds everything and
   restores in place.
+- **Claude Code dashboard**: see what Claude Code is doing across your
+  machines: active repos, sessions working versus waiting for input, and
+  each repo's beads issue counts. Run
+  [`scripts/claude-code-connector.py`](scripts/claude-code-connector.py)
+  on each dev machine (the dashboard hands you the exact command and
+  token) and link repos to boards for a live status chip on the board.
 
 ## Run it
 

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Claude Code · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="board-header">
+  <h1 style="font-size: 1.15rem; margin: 0;">Claude Code</h1>
+  <span class="muted" id="dash-updated"></span>
+</div>
+
+<div id="dash-empty" class="panel" hidden>
+  <h1>No machines reporting yet</h1>
+  <p>Run the connector on each machine where Claude Code works:</p>
+  <pre style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem; overflow-x: auto;">python3 claude-code-connector.py \
+  --url {{ request.base_url }} \
+  --token {{ connector_token }}</pre>
+  <p class="muted">The script is <code>scripts/claude-code-connector.py</code> in the repo.
+    It posts a status snapshot every 60 seconds; add <code>--interval 30</code> to
+    report faster, or install it as a service with <code>--install</code> (systemd).
+    It reads Claude Code's local session files and each repo's
+    <code>.beads/issues.jsonl</code>; nothing else leaves the machine.</p>
+</div>
+
+<div class="dash-grid" id="dash-grid"></div>
+
+<dialog id="link-dialog">
+  <form method="dialog" id="link-form">
+    <input type="hidden" name="path">
+    <p style="margin-top: 0;">Connect <strong id="link-repo-name"></strong> to a tracker project:</p>
+    <select name="project_id">
+      <option value="">(no project)</option>
+      {% for p in tracker_projects %}
+      <option value="{{ p.id }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="dialog-actions">
+      <button type="submit" class="primary">Connect</button>
+      <button type="button" id="link-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  window.DASH = { token: {{ connector_token | tojson }} };
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/dashboard-claude.js"></script>
+{% endblock %}
