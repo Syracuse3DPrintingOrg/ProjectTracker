@@ -473,6 +473,10 @@
     fileDropCard = null;
   }
 
+  // Capture phase throughout: SortableJS listens for native drag events on
+  // the .cards containers between the card and #board and can stop
+  // propagation, which would starve bubble-phase handlers here and make the
+  // browser refuse the drop entirely.
   boardEl.addEventListener("dragover", (e) => {
     if (!dragHasFiles(e)) return;
     const card = e.target.closest(".card");
@@ -484,11 +488,11 @@
       fileDropCard = card;
       card.classList.add("file-drop");
     }
-  });
+  }, true);
 
   boardEl.addEventListener("dragleave", (e) => {
     if (fileDropCard && !fileDropCard.contains(e.relatedTarget)) clearFileDropTarget();
-  });
+  }, true);
 
   boardEl.addEventListener("drop", async (e) => {
     if (!dragHasFiles(e)) return;
@@ -510,9 +514,12 @@
     } catch (err) { /* the chip catches up next reload */ }
   });
 
-  // A file dropped anywhere else must not navigate the page away.
-  document.addEventListener("dragover", (e) => { if (dragHasFiles(e)) e.preventDefault(); });
-  document.addEventListener("drop", (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+  // A file dropped anywhere else must not navigate the page away. Capture
+  // phase, so no other handler's stopPropagation can starve the guard.
+  document.addEventListener("dragover", (e) => { if (dragHasFiles(e)) e.preventDefault(); }, true);
+  document.addEventListener("drop", (e) => {
+    if (dragHasFiles(e) && !e.target.closest(".card, .dropzone")) e.preventDefault();
+  }, true);
 
   /* ---- AI research and handoff ---- */
 

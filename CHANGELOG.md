@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-07-16
+
+### Fixed
+
+- **AI buttons actually answer again.** Google retired the
+  gemini-2.0-flash model SQ used by default, so every assist button
+  failed quietly with a 404 from Gemini. The default is now
+  gemini-2.5-flash; if you had typed a model name into Settings
+  yourself, update it there.
+- **Dropping files onto a board card works.** The board's card-sorting
+  library intercepted file drags before SQ's drop handler could accept
+  them, so the browser refused the drop. File drops now take priority
+  over sorting.
+
 ## [0.11.0] - 2026-07-16
 
 ### Added

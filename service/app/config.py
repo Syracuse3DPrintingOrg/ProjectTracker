@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 
-APP_VERSION = "0.11.0"
+APP_VERSION = "0.11.1"
 APP_NAME = "SQ"
 APP_TAGLINE = "the project tracker for the easily distracted"
 
@@ -62,7 +62,7 @@ _ENV_MAP = {
 }
 
 _MODEL_DEFAULTS = {
-    "gemini": "gemini-2.0-flash",
+    "gemini": "gemini-2.5-flash",
     "anthropic": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
     "ollama": "llama3.2",
