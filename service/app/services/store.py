@@ -539,6 +539,30 @@ def set_today(card_id: int, today: bool, position: int | None = None) -> dict | 
     return get_card(card_id)
 
 
+def toggle_done(card_id: int) -> dict | None:
+    """Kiosk tap: send a card to the first done column, or back to the
+    first working column when it is already done. Recurring cards
+    respawn through the normal move logic."""
+    card = get_card(card_id)
+    if not card:
+        return None
+    with database.connect() as conn:
+        current = conn.execute(
+            "SELECT is_done FROM columns WHERE id = ?", (card["column_id"],)
+        ).fetchone()
+        target = conn.execute(
+            "SELECT id FROM columns WHERE project_id = ? AND is_done = ?"
+            " ORDER BY position, id LIMIT 1",
+            (card["project_id"], 0 if current and current["is_done"] else 1),
+        ).fetchone()
+    if not target:
+        return card
+    count = len(
+        [c for c in list_cards(card["project_id"]) if c["column_id"] == target["id"]]
+    )
+    return move_card(card_id, target["id"], count)
+
+
 def clear_done_today() -> int:
     """Drop finished cards off the Today list. Returns how many were cleared."""
     with database.connect() as conn:

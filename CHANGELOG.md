@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-16
+
+### Added
+
+- **Kiosk mode.** A big, tappable Today dashboard at /kiosk: huge type,
+  tap a task to check it off (recurring chores respawn as usual), a
+  clock, a progress bar, and a footer that quietly mentions overdue
+  cards and your most neglected project. Press Kiosk in the top bar and
+  this browser becomes a wall screen; the preference sticks to the
+  device, and the small x on the dashboard turns it back into the full
+  app. Perfect for a tablet on the fridge.
+- **Registered screens get the kiosk by default.** Browser displays from
+  the Displays page now point at the kiosk dashboard, with their saved
+  look (theme, size, TV margins) applied. Wall touchscreens can tick
+  tasks off using the display token; the classic passive page stays at
+  /display.
+
 ## [0.9.0] - 2026-07-16
 
 ### Added

@@ -21,6 +21,7 @@
   </div>
   <div class="nav-links">
     {% block nav %}{% endblock %}
+    <a href="#" id="kiosk-toggle" title="Kiosk mode: this device becomes a Today dashboard">Kiosk</a>
     <a href="/search" title="Search">&#128269;</a>
     {% if user %}<a href="/account" class="muted" title="Your account">{{ user.username }} &middot; {{ user.role }}</a>{% endif %}
     {% if is_admin or not auth_required %}<a href="/settings">Settings</a>{% endif %}
@@ -29,6 +30,20 @@
 </nav>
 <script>
   (function () {
+    // Per-device kiosk preference: while it is on, this browser lives on
+    // the kiosk dashboard (exit from the kiosk page clears it).
+    if (localStorage.getItem("sq_kiosk") === "1" && window.location.pathname !== "/kiosk") {
+      window.location.replace("/kiosk");
+      return;
+    }
+    var kioskBtn = document.getElementById("kiosk-toggle");
+    if (kioskBtn) {
+      kioskBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        localStorage.setItem("sq_kiosk", "1");
+        window.location.href = "/kiosk";
+      });
+    }
     var path = window.location.pathname;
     document.querySelectorAll(".nav-pills .pill").forEach(function (a) {
       var target = a.getAttribute("href");

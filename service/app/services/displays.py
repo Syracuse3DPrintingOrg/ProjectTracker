@@ -94,14 +94,16 @@ def _clean_params(params: dict) -> dict:
 
 
 def display_url(display: dict, base_url: str, settings: dict | None = None) -> str:
-    """Absolute /display URL for a registered display, token included."""
+    """Absolute URL for a registered display, token included. Browser
+    screens get the kiosk dashboard (tappable); the classic passive page
+    stays available at /display for anything that prefers it."""
     s = settings or config.load_settings()
     query = {"d": display["id"]}
     query.update(display.get("params") or {})
     token = s.get("display_token", "")
     if token:
         query["token"] = token
-    return f"{base_url.rstrip('/')}/display?{urlencode(query)}"
+    return f"{base_url.rstrip('/')}/kiosk?{urlencode(query)}"
 
 
 def api_url(display: dict, base_url: str, settings: dict | None = None) -> str:

@@ -48,6 +48,76 @@ def display_data():
     return _compact_today()
 
 
+@router.get("/api/kiosk/data")
+def kiosk_data():
+    """Everything the kiosk dashboard shows, in one poll."""
+    nudge = store.nudge_data()
+    tasks = []
+    for card in store.list_today():
+        done, total = checklist.progress(card["description"])
+        tasks.append(
+            {
+                "id": card["id"],
+                "title": card["title"],
+                "project": card["project_name"],
+                "done": bool(card["done"]),
+                "priority": card["priority"],
+                "due": card["due_date"],
+                "checklist": f"{done}/{total}" if total else "",
+            }
+        )
+    return {
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "tasks": tasks,
+        "remaining": sum(1 for t in tasks if not t["done"]),
+        "overdue": store.overdue_count(),
+        "stalest": (
+            {"name": nudge[0]["name"], "days_quiet": nudge[0]["days_quiet"]}
+            if nudge and nudge[0]["days_quiet"] >= 3
+            else None
+        ),
+    }
+
+
+@router.post("/api/kiosk/toggle/{card_id}")
+def kiosk_toggle(card_id: int):
+    """Tap a task on a kiosk: done, or back again. This is the one write
+    a display token may make."""
+    card = store.toggle_done(card_id)
+    if not card:
+        from fastapi import HTTPException
+
+        raise HTTPException(404)
+    return card
+
+
+@router.get("/kiosk")
+def kiosk_page(request: Request, d: str = ""):
+    """The kiosk dashboard: today's tasks, huge and tappable."""
+    from ..services import displays as displays_svc
+
+    params: dict = {}
+    if d:
+        entry = displays_svc.get_display(d)
+        if entry:
+            params.update(entry.get("params") or {})
+            params.setdefault("title", entry.get("name", ""))
+    for key in displays_svc.PARAM_KEYS:
+        if key in request.query_params:
+            params[key] = request.query_params[key]
+    return templates.TemplateResponse(
+        request,
+        "kiosk.html",
+        {
+            "theme": params.get("theme", "dark"),
+            "scale": params.get("scale", "1"),
+            "tv": params.get("tv", "") in ("1", "true"),
+            "hide_done": params.get("hide_done", "") in ("1", "true"),
+            "title": params.get("title", ""),
+        },
+    )
+
+
 @router.get("/display")
 def display_page(request: Request, d: str = ""):
     """The wall display page.

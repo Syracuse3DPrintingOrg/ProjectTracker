@@ -38,7 +38,7 @@ app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 # Paths that never require a session.
 _OPEN_PREFIXES = ("/static/", "/login", "/health")
-_DISPLAY_PREFIXES = ("/display", "/api/display")
+_DISPLAY_PREFIXES = ("/display", "/api/display", "/kiosk", "/api/kiosk")
 
 
 @app.middleware("http")

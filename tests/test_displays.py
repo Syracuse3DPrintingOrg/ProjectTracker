@@ -27,7 +27,7 @@ def test_create_rejects_unknown_kind(temp_data_dir):
 def test_display_url_includes_params_and_token(temp_data_dir):
     d = displays.create_display("Pi", "browser", params={"theme": "light", "scale": "1.25"})
     url = displays.display_url(d, "http://tracker.lan:9280/", {"password_hash": "", "display_token": ""})
-    assert url.startswith("http://tracker.lan:9280/display?")
+    assert url.startswith("http://tracker.lan:9280/kiosk?")
     assert f"d={d['id']}" in url
     assert "theme=light" in url and "scale=1.25" in url
     assert "token" not in url
