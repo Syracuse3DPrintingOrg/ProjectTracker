@@ -17,6 +17,13 @@ SQLite file, no accounts to create.
   at the start with a fresh due date). Drag cards between columns or
   reorder within one, on desktop or touch. Columns take optional
   work-in-progress limits.
+- **Attachments and previews**: drag any file onto a card. CSV and Excel
+  preview as tables, Word and text as text, images and PDFs inline, and
+  STL models in a built-in 3D viewer. STEP and SolidWorks files are
+  stored and downloadable (export an STL alongside for a preview).
+- **Hand a card to any AI**: one button packs a card into a
+  self-contained prompt for Claude, ChatGPT, Gemini, or a Claude Code
+  command; the built-in AI can also research approaches for a card.
 - **Search and filter**: search every project from the top bar; filter
   the board as you type.
 - **Today's Tasks**: drag any card onto the Today rail and it appears on

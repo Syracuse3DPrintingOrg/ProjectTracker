@@ -212,6 +212,37 @@ def plan_today(candidates: list[dict], today: str) -> list[int]:
     return picked[:8]
 
 
+RESEARCH_PROMPT = """You are helping someone figure out how to complete a
+task on their project board.
+
+Task: {title}
+Project: {project}
+Details so far: {description}
+
+Research ways to get this done. Reply in plain markdown (no JSON) with
+exactly these sections:
+## Approaches
+Two or three realistic ways to tackle it, each with a one-line tradeoff.
+## Suggested steps
+A short numbered plan for the approach you would pick.
+## Watch out for
+Two or three pitfalls, risks, or gotchas.
+## Tools and materials
+Only if this is a physical or hands-on task; otherwise omit the section.
+
+Keep the whole reply under 350 words. No preamble, no closing remarks.
+"""
+
+
+def research(title: str, description: str, project: str) -> str:
+    reply = complete(
+        RESEARCH_PROMPT.format(
+            title=title, description=description or "(none)", project=project
+        )
+    )
+    return reply.strip()
+
+
 def suggest_subtasks(title: str, description: str = "") -> list[str]:
     reply = complete(SUBTASKS_PROMPT.format(title=title, description=description))
     items = parse_json_response(reply)

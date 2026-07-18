@@ -45,6 +45,8 @@
       const done = parseInt(el.dataset.checkDone || "0", 10);
       html += `<span class="chip ${done === total ? "check-full" : ""}">&#9745; ${done}/${total}</span>`;
     }
+    const att = parseInt(el.dataset.attachments || "0", 10);
+    if (att) html += `<span class="chip" title="${att} file${att > 1 ? "s" : ""} attached">&#128206; ${att}</span>`;
     const recur = parseInt(el.dataset.recur || "0", 10);
     if (recur) html += `<span class="chip" title="Repeats every ${recur} day${recur > 1 ? "s" : ""}">&#8635; ${recur}d</span>`;
     if (p !== 2) html += `<span class="chip p${p}">P${p}</span>`;
@@ -78,6 +80,7 @@
     div.dataset.due = card.due_date;
     div.dataset.labels = card.labels;
     div.dataset.recur = card.recur_days || 0;
+    div.dataset.attachments = card.attachments || 0;
     const items = checklistItems(card.description);
     div.dataset.checkTotal = items.length;
     div.dataset.checkDone = items.filter(i => i.checked).length;
@@ -242,6 +245,11 @@
     document.getElementById("card-delete").hidden = !card;
     document.getElementById("assist-actions").hidden = !(card && window.BOARD.aiConfigured);
     document.getElementById("assist-note").textContent = "";
+    document.getElementById("handoff-actions").hidden = !card;
+    document.getElementById("attachments-box").hidden = !card;
+    document.getElementById("attachment-list").textContent = "";
+    document.getElementById("attachment-note").textContent = "";
+    if (card) refreshAttachments(card.id).catch(() => { /* list stays empty */ });
     renderDialogChecklist();
     dialog.showModal();
   }
@@ -340,6 +348,301 @@
   }
   document.getElementById("assist-subtasks").addEventListener("click", () => assist("subtasks"));
   document.getElementById("assist-describe").addEventListener("click", () => assist("describe"));
+
+  /* ---- attachments ---- */
+
+  function humanSize(n) {
+    if (!isFinite(n) || n < 0) return "";
+    if (n < 1024) return n + " B";
+    const units = ["KB", "MB", "GB"];
+    let u = -1;
+    do { n /= 1024; u++; } while (n >= 1024 && u < units.length - 1);
+    return (Math.round(n * 10) / 10) + " " + units[u];
+  }
+
+  function setCardAttachmentCount(cardId, n) {
+    document.querySelectorAll(`.card[data-card-id="${cardId}"]`).forEach(el => {
+      el.dataset.attachments = n;
+      renderMeta(el);
+    });
+  }
+
+  async function uploadAttachment(cardId, file) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const resp = await fetch(`/api/cards/${cardId}/attachments`, { method: "POST", body: fd });
+    if (!resp.ok) {
+      let detail = resp.statusText;
+      try { detail = (await resp.json()).detail || detail; } catch (e) { /* ignore */ }
+      throw new Error(detail);
+    }
+    return resp.json();
+  }
+
+  function renderAttachmentList(items) {
+    const list = document.getElementById("attachment-list");
+    list.textContent = "";
+    items.forEach(att => {
+      const row = document.createElement("div");
+      row.className = "attachment-row";
+      const name = document.createElement("a");
+      name.href = "#";
+      name.className = "attachment-name";
+      name.textContent = att.filename;
+      name.title = att.filename;
+      name.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.SQPreview.open(att.id);
+      });
+      const size = document.createElement("span");
+      size.className = "attachment-size muted";
+      size.textContent = humanSize(att.size);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "attachment-delete";
+      del.title = "Delete this file";
+      del.textContent = "×";
+      del.addEventListener("click", async () => {
+        if (!confirm(`Delete "${att.filename}"? The file is gone for good.`)) return;
+        try {
+          await api(`/api/attachments/${att.id}`, { method: "DELETE" });
+          await refreshAttachments(att.card_id);
+        } catch (err) { alert(err.message); }
+      });
+      row.append(name, size, del);
+      list.appendChild(row);
+    });
+  }
+
+  async function refreshAttachments(cardId) {
+    const items = await api(`/api/cards/${cardId}/attachments`);
+    renderAttachmentList(items);
+    setCardAttachmentCount(cardId, items.length);
+    return items;
+  }
+
+  const attachDrop = document.getElementById("attachment-drop");
+  const attachInput = document.getElementById("attachment-input");
+  const attachNote = document.getElementById("attachment-note");
+
+  async function uploadToOpenCard(files) {
+    const cardId = form.card_id.value;
+    if (!cardId || !files.length) return;
+    attachNote.textContent = "Uploading…";
+    try {
+      for (const f of files) await uploadAttachment(cardId, f);
+      attachNote.textContent = "";
+    } catch (err) {
+      attachNote.textContent = "Upload failed: " + err.message;
+    }
+    try { await refreshAttachments(cardId); } catch (e) { /* keep the note */ }
+  }
+
+  attachDrop.addEventListener("click", () => attachInput.click());
+  attachInput.addEventListener("change", async () => {
+    const files = [...attachInput.files];
+    attachInput.value = "";
+    await uploadToOpenCard(files);
+  });
+
+  function dragHasFiles(e) {
+    return !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files"));
+  }
+
+  attachDrop.addEventListener("dragover", (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    attachDrop.classList.add("dragover");
+  });
+  attachDrop.addEventListener("dragleave", () => attachDrop.classList.remove("dragover"));
+  attachDrop.addEventListener("drop", async (e) => {
+    if (!dragHasFiles(e)) return;
+    e.preventDefault();
+    attachDrop.classList.remove("dragover");
+    await uploadToOpenCard([...e.dataTransfer.files]);
+  });
+
+  /* Drop files straight onto a board card. Only file drags get handled, so
+     SortableJS card dragging is left alone. */
+
+  const boardEl = document.getElementById("board");
+  let fileDropCard = null;
+
+  function clearFileDropTarget() {
+    if (fileDropCard) fileDropCard.classList.remove("file-drop");
+    fileDropCard = null;
+  }
+
+  boardEl.addEventListener("dragover", (e) => {
+    if (!dragHasFiles(e)) return;
+    const card = e.target.closest(".card");
+    if (!card) { clearFileDropTarget(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (fileDropCard !== card) {
+      clearFileDropTarget();
+      fileDropCard = card;
+      card.classList.add("file-drop");
+    }
+  });
+
+  boardEl.addEventListener("dragleave", (e) => {
+    if (fileDropCard && !fileDropCard.contains(e.relatedTarget)) clearFileDropTarget();
+  });
+
+  boardEl.addEventListener("drop", async (e) => {
+    if (!dragHasFiles(e)) return;
+    const card = e.target.closest(".card");
+    clearFileDropTarget();
+    if (!card) return;
+    e.preventDefault();
+    const files = [...e.dataTransfer.files];
+    if (!files.length) return;
+    const cardId = card.dataset.cardId;
+    try {
+      for (const f of files) await uploadAttachment(cardId, f);
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    }
+    try {
+      const items = await api(`/api/cards/${cardId}/attachments`);
+      setCardAttachmentCount(cardId, items.length);
+    } catch (err) { /* the chip catches up next reload */ }
+  });
+
+  // A file dropped anywhere else must not navigate the page away.
+  document.addEventListener("dragover", (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+  document.addEventListener("drop", (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+
+  /* ---- AI research and handoff ---- */
+
+  async function copyText(text, host) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) { /* fall through to the manual path */ }
+    }
+    // Plain-http tablets have no clipboard API; a temporary textarea does it.
+    // It must live inside the open modal dialog or focus is blocked.
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    (host || document.body).appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  const researchDialog = document.getElementById("research-dialog");
+  let researchText = "";
+
+  function renderResearch(text) {
+    const box = document.getElementById("research-body");
+    box.textContent = "";
+    text.split("\n").forEach(line => {
+      const m = line.match(/^#{1,6}\s+(.*)$/);
+      if (m) {
+        const strong = document.createElement("strong");
+        strong.textContent = m[1];
+        box.appendChild(strong);
+      } else {
+        box.appendChild(document.createTextNode(line));
+      }
+      box.appendChild(document.createTextNode("\n"));
+    });
+  }
+
+  document.getElementById("assist-research").addEventListener("click", async () => {
+    const id = form.card_id.value;
+    if (!id) return;
+    const btn = document.getElementById("assist-research");
+    const note = document.getElementById("assist-note");
+    btn.disabled = true;
+    note.textContent = "Researching… this can take a minute.";
+    try {
+      const data = await api("/api/assist/research", {
+        method: "POST",
+        body: JSON.stringify({ card_id: parseInt(id, 10) }),
+      });
+      researchText = data.research || "";
+      renderResearch(researchText);
+      document.getElementById("research-note").textContent = "";
+      note.textContent = "";
+      researchDialog.showModal();
+    } catch (err) {
+      note.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("research-append").addEventListener("click", () => {
+    form.description.value =
+      form.description.value.replace(/\s+$/, "") + "\n\n---\nResearch notes:\n" + researchText;
+    renderDialogChecklist();
+    researchDialog.close();
+    document.getElementById("assist-note").textContent = "Added to the description. Save to keep it.";
+  });
+
+  document.getElementById("research-copy").addEventListener("click", async () => {
+    const ok = await copyText(researchText, researchDialog);
+    document.getElementById("research-note").textContent =
+      ok ? "Copied." : "Copy failed. Select the text and copy it by hand.";
+  });
+
+  document.getElementById("research-close").addEventListener("click", () => researchDialog.close());
+
+  const handoffDialog = document.getElementById("handoff-dialog");
+  let handoffPrompt = "";
+
+  document.getElementById("send-to-ai").addEventListener("click", async () => {
+    const id = form.card_id.value;
+    if (!id) return;
+    try {
+      const data = await api(`/api/cards/${id}/handoff`);
+      handoffPrompt = data.prompt || "";
+      document.getElementById("handoff-text").value = handoffPrompt;
+      document.getElementById("handoff-note").textContent = "";
+      handoffDialog.showModal();
+    } catch (err) { alert(err.message); }
+  });
+
+  async function handoffCopy(text, doneNote) {
+    const ok = await copyText(text, handoffDialog);
+    document.getElementById("handoff-note").textContent =
+      ok ? doneNote : "Copy failed. Select the prompt above and copy it by hand.";
+    return ok;
+  }
+
+  document.getElementById("handoff-copy").addEventListener("click", () => {
+    handoffCopy(handoffPrompt, "Copied.");
+  });
+
+  document.getElementById("handoff-claude").addEventListener("click", () => {
+    window.open("https://claude.ai/new?q=" + encodeURIComponent(handoffPrompt));
+  });
+
+  document.getElementById("handoff-chatgpt").addEventListener("click", () => {
+    window.open("https://chatgpt.com/?q=" + encodeURIComponent(handoffPrompt));
+  });
+
+  document.getElementById("handoff-gemini").addEventListener("click", async () => {
+    await handoffCopy(handoffPrompt, "Copied. Paste it into Gemini.");
+    window.open("https://gemini.google.com/app");
+  });
+
+  document.getElementById("handoff-claude-code").addEventListener("click", () => {
+    const shellSafe = handoffPrompt.replace(/[\\"`$]/g, (c) => "\\" + c);
+    handoffCopy('claude "' + shellSafe + '"', "Copied. Paste it into a terminal.");
+  });
+
+  document.getElementById("handoff-close").addEventListener("click", () => handoffDialog.close());
 
   /* ---- columns ---- */
 

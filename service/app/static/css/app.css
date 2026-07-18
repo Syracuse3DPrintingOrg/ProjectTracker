@@ -361,3 +361,173 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
   gap: 0.6rem;
   align-items: baseline;
 }
+
+/* attachments */
+.attachment-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.attachment-row .attachment-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-row .attachment-size { font-size: 0.78rem; flex-shrink: 0; }
+.attachment-row .attachment-delete {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0 0.4rem;
+  line-height: 1;
+}
+.attachment-row .attachment-delete:hover { color: var(--danger); box-shadow: none; }
+.dropzone {
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+  color: var(--muted);
+  text-align: center;
+  padding: 0.7rem;
+  margin-top: 0.35rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.dropzone:hover { border-color: var(--accent); color: var(--text); }
+.dropzone.dragover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(138, 99, 255, 0.08);
+  box-shadow: var(--glow);
+}
+.card.file-drop { border-color: var(--accent); box-shadow: var(--glow); }
+
+/* preview dialog */
+.preview-dialog {
+  width: min(92vw, 1100px);
+  height: 86vh;
+  max-height: 86vh;
+  padding: 0;
+  flex-direction: column;
+}
+.preview-dialog[open] { display: flex; }
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.preview-head .preview-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-head .preview-size { font-size: 0.8rem; flex-shrink: 0; }
+.preview-head .spacer { flex: 1; }
+.preview-head .preview-download { flex-shrink: 0; font-size: 0.85rem; }
+.preview-head .preview-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+  padding: 0 0.3rem;
+  line-height: 1;
+}
+.preview-head .preview-close:hover { color: var(--text); box-shadow: none; }
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.preview-body .preview-note {
+  margin: auto;
+  color: var(--muted);
+  text-align: center;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.preview-table-wrap { flex: 1; overflow: auto; min-height: 0; }
+.preview-table { border-collapse: collapse; width: 100%; font-size: 0.83rem; }
+.preview-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 0.35rem 0.6rem;
+  white-space: nowrap;
+}
+.preview-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+}
+.preview-text {
+  flex: 1;
+  margin: 0;
+  padding: 0.8rem 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+}
+.preview-foot-note {
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.8rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.preview-image { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.preview-frame { flex: 1; width: 100%; border: 0; }
+.stl-canvas { flex: 1; width: 100%; min-height: 0; display: block; touch-action: none; cursor: grab; }
+.stl-canvas:active { cursor: grabbing; }
+.stl-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.5rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+/* research and handoff dialogs */
+#research-dialog { width: min(720px, 92vw); }
+.research-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 55vh;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.7rem 0.85rem;
+  font-size: 0.88rem;
+}
+#handoff-dialog { width: min(640px, 92vw); }
+#handoff-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; }
+.handoff-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-top: 0.7rem;
+}
+.handoff-stack { display: flex; flex-direction: column; max-width: 180px; }
+.handoff-hint { font-size: 0.72rem; margin-top: 0.2rem; }

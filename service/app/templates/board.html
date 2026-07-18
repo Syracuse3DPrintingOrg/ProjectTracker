@@ -77,6 +77,13 @@
       <label>Checklist</label>
       <div id="checklist-items"></div>
     </div>
+    <div id="attachments-box" hidden>
+      <label>Attachments</label>
+      <div id="attachment-list"></div>
+      <div id="attachment-drop" class="dropzone">Drop files here or click to browse</div>
+      <input type="file" id="attachment-input" multiple hidden>
+      <div class="assist-note" id="attachment-note"></div>
+    </div>
     <div class="field-row">
       <div>
         <label>Priority</label>
@@ -109,7 +116,11 @@
     <div class="dialog-actions" id="assist-actions" hidden>
       <button type="button" id="assist-subtasks">AI: break into subtasks</button>
       <button type="button" id="assist-describe">AI: draft description</button>
+      <button type="button" id="assist-research">AI: research approaches</button>
       <span class="assist-note" id="assist-note"></span>
+    </div>
+    <div class="dialog-actions" id="handoff-actions" hidden>
+      <button type="button" id="send-to-ai" title="Package this card as a prompt for an outside AI">Send to AI</button>
     </div>
     <div class="dialog-actions">
       <button type="submit" class="primary" value="save">Save</button>
@@ -134,6 +145,40 @@
   </form>
 </dialog>
 
+<dialog id="research-dialog">
+  <p style="margin-top: 0;">Research notes
+    <span class="muted">(from the AI; review before you trust them)</span></p>
+  <div id="research-body" class="research-text"></div>
+  <div class="dialog-actions">
+    <button type="button" class="primary" id="research-append">Append to card</button>
+    <button type="button" id="research-copy">Copy</button>
+    <span class="assist-note" id="research-note"></span>
+    <span class="spacer"></span>
+    <button type="button" id="research-close">Close</button>
+  </div>
+</dialog>
+
+<dialog id="handoff-dialog">
+  <p style="margin-top: 0;">Send this card to an AI
+    <span class="muted">(the prompt below carries everything on the card)</span></p>
+  <textarea id="handoff-text" rows="10" readonly></textarea>
+  <div class="handoff-buttons">
+    <button type="button" id="handoff-copy">Copy prompt</button>
+    <button type="button" id="handoff-claude">Open in Claude</button>
+    <button type="button" id="handoff-chatgpt">Open in ChatGPT</button>
+    <div class="handoff-stack">
+      <button type="button" id="handoff-gemini">Copy for Gemini</button>
+      <div class="muted handoff-hint">copies the prompt, paste it in Gemini</div>
+    </div>
+    <button type="button" id="handoff-claude-code" title="Copies a ready-to-run shell command">Copy for Claude Code</button>
+  </div>
+  <div class="dialog-actions">
+    <span class="assist-note" id="handoff-note"></span>
+    <span class="spacer"></span>
+    <button type="button" id="handoff-close">Close</button>
+  </div>
+</dialog>
+
 <script>
   window.BOARD = {
     projectId: {{ project.id }},
@@ -145,5 +190,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/vendor/Sortable.min.js"></script>
+<script src="/static/js/stl-viewer.js"></script>
+<script src="/static/js/preview.js"></script>
 <script src="/static/js/board.js"></script>
 {% endblock %}

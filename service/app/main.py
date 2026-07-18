@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config, database
 from .routers import (
+    attachments_router,
     boards,
     connectors_router,
     display,
@@ -94,5 +95,6 @@ app.include_router(displays_router.router)
 app.include_router(connectors_router.router)
 app.include_router(users_router.router)
 app.include_router(integrations_router.router)
+app.include_router(attachments_router.router)
 app.include_router(llm_router.router)
 app.include_router(settings_router.router)

@@ -111,6 +111,9 @@ def archive_project(project_id: int, archived: bool = True):
 
 @router.delete("/projects/{project_id}", status_code=204)
 def delete_project(project_id: int):
+    from ..services import attachments
+
+    attachments.delete_files_for_project(project_id)
     store.delete_project(project_id)
 
 
@@ -190,6 +193,9 @@ def update_card(card_id: int, body: CardUpdate):
 
 @router.delete("/cards/{card_id}", status_code=204)
 def delete_card(card_id: int):
+    from ..services import attachments
+
+    attachments.delete_files_for_card(card_id)
     store.delete_card(card_id)
 
 
@@ -210,6 +216,54 @@ def toggle_checklist(card_id: int, body: ChecklistIn):
     if updated is None:
         raise HTTPException(400, "no checklist item at that index")
     return store.update_card(card_id, description=updated)
+
+
+@router.get("/cards/{card_id}/handoff")
+def handoff(card_id: int):
+    """A self-contained prompt that hands this card to any LLM."""
+    from ..services import attachments, checklist as checklist_svc
+
+    card = store.get_card(card_id)
+    if not card:
+        raise HTTPException(404)
+    project = store.get_project(card["project_id"])
+    column = next(
+        (c for c in store.list_columns(card["project_id"]) if c["id"] == card["column_id"]),
+        None,
+    )
+    items = checklist_svc.parse_checklist(card["description"])
+    files = attachments.list_for_card(card_id)
+
+    lines = [
+        "I need help completing a task from my project tracker.",
+        "",
+        f"Task: {card['title']}",
+        f"Project: {project['name'] if project else 'unknown'}",
+        f"Status: {column['name'] if column else 'unknown'}",
+    ]
+    if card["priority"] != 2:
+        lines.append(f"Priority: P{card['priority']}")
+    if card["due_date"]:
+        lines.append(f"Due: {card['due_date']}")
+    if card["labels"]:
+        lines.append(f"Labels: {card['labels']}")
+    if card["description"].strip():
+        lines += ["", "Details:", card["description"].strip()]
+    if items:
+        done = sum(1 for i in items if i["checked"])
+        lines += ["", f"Checklist ({done}/{len(items)} done):"]
+        lines += [
+            f"- [{'x' if i['checked'] else ' '}] {i['text']}" for i in items
+        ]
+    if files:
+        lines += ["", "Attached files (not included here):"]
+        lines += [f"- {f['filename']} ({f['size']} bytes)" for f in files]
+    lines += [
+        "",
+        "Please help me finish this: propose a concrete plan, do any parts"
+        " you can directly, and tell me what you need from me.",
+    ]
+    return {"prompt": "\n".join(lines), "title": card["title"]}
 
 
 @router.get("/search")

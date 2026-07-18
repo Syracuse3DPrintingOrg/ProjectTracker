@@ -54,6 +54,9 @@ def project_board(request: Request, project_id: int):
         if project.get("claude_path")
         else None
     )
+    from ..services import attachments
+
+    attachment_counts = attachments.counts_by_card(project_id)
     return templates.TemplateResponse(
         request,
         "board.html",
@@ -64,6 +67,7 @@ def project_board(request: Request, project_id: int):
             "projects": store.list_projects(),
             "columns": store.list_columns(project_id),
             "cards": store.list_cards(project_id),
+            "attachment_counts": attachment_counts,
             "today_ids": [c["id"] for c in store.list_today()],
         },
     )

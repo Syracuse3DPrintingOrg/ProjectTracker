@@ -52,6 +52,25 @@ def plan_day():
     return {"added": added}
 
 
+@router.post("/research")
+def research(body: AssistIn):
+    """Ask the LLM for ways to complete this card. Returns markdown; the
+    client decides whether to append it to the description."""
+    card = store.get_card(body.card_id)
+    if not card:
+        raise HTTPException(404)
+    if not llm.is_configured():
+        raise HTTPException(400, "no LLM provider configured")
+    project = store.get_project(card["project_id"])
+    try:
+        text = llm.research(
+            card["title"], card["description"], project["name"] if project else ""
+        )
+    except llm.LLMError as exc:
+        raise HTTPException(502, str(exc))
+    return {"research": text}
+
+
 @router.post("/describe")
 def describe(body: AssistIn):
     card = store.get_card(body.card_id)

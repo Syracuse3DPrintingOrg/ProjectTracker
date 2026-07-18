@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-16
+
+### Added
+
+- **Attachments.** Drag any file onto a card (or into its dialog) and it
+  sticks: drawings, spreadsheets, photos, meshes, firmware, whatever.
+  Cards show a paperclip count, files download from the card, and
+  deleting a card cleans its files up. Up to 100 MB per file.
+- **Previews.** Click an attachment and SQ shows it right there: CSV and
+  Excel as tables, Word documents and text or code as readable text,
+  images and PDFs inline, and STL models in a spin-and-zoom 3D viewer
+  built into the page (no plugins, works offline). STEP and SolidWorks
+  files get an honest explanation and a download link; export an STL
+  next to them for the 3D preview.
+- **AI research.** A card's assist row gains "research approaches": the
+  AI lays out realistic ways to get the task done, suggested steps, and
+  pitfalls, which you can append to the card or copy.
+- **Send a card to any AI.** Every card gets a handoff button that packs
+  the whole card (details, checklist state, due date, attachment list)
+  into one self-contained prompt: copy it, open it straight in Claude or
+  ChatGPT, copy it for Gemini, or copy it as a ready-to-run Claude Code
+  command.
+
 ## [0.10.0] - 2026-07-16
 
 ### Added
