@@ -179,6 +179,34 @@ def plan_candidates(limit: int = 40) -> list[dict]:
         )
 
 
+def overdue_count() -> int:
+    with database.connect() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM cards"
+            " JOIN columns ON columns.id = cards.column_id"
+            " JOIN projects ON projects.id = cards.project_id"
+            " WHERE projects.archived = 0 AND columns.is_done = 0"
+            " AND cards.due_date != '' AND cards.due_date < date('now')"
+        ).fetchone()[0]
+
+
+def project_open_counts() -> list[dict]:
+    """Active projects with their open-card counts, zero included."""
+    with database.connect() as conn:
+        return _rows(
+            conn.execute(
+                "SELECT projects.id, projects.name, projects.status,"
+                " COUNT(cards.id) AS open_cards"
+                " FROM projects"
+                " LEFT JOIN cards ON cards.project_id = projects.id"
+                "   AND cards.column_id IN"
+                "   (SELECT id FROM columns WHERE is_done = 0)"
+                " WHERE projects.archived = 0 AND projects.status = 'active'"
+                " GROUP BY projects.id ORDER BY projects.position, projects.id"
+            )
+        )
+
+
 def set_column_done(column_id: int, is_done: bool) -> None:
     with database.connect() as conn:
         conn.execute(

@@ -206,6 +206,76 @@
 
   loadUsers();
 
+  // --- API keys ---
+  const keysBody = document.getElementById("keys-body");
+  const keysNote = document.getElementById("keys-note");
+
+  function keyRow(k) {
+    const tr = document.createElement("tr");
+    tr.style.borderBottom = "1px solid var(--border)";
+    const name = document.createElement("td");
+    name.style.padding = "0.6rem 0.4rem";
+    const strong = document.createElement("strong");
+    strong.textContent = k.name;
+    name.appendChild(strong);
+    tr.appendChild(name);
+    const role = document.createElement("td");
+    role.style.padding = "0.6rem 0.4rem";
+    role.innerHTML = `<span class="chip">${k.role}</span>`;
+    tr.appendChild(role);
+    const used = document.createElement("td");
+    used.style.padding = "0.6rem 0.4rem";
+    used.className = "muted";
+    used.textContent = k.last_used ? "last used " + k.last_used + " UTC" : "never used";
+    tr.appendChild(used);
+    const actions = document.createElement("td");
+    actions.style.padding = "0.6rem 0.4rem";
+    actions.style.textAlign = "right";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "danger";
+    del.textContent = "Revoke";
+    del.addEventListener("click", async () => {
+      if (!confirm(`Revoke "${k.name}"? Anything using it stops working immediately.`)) return;
+      try {
+        await apiUsers("/api/keys/" + k.id, "DELETE");
+        await loadKeys();
+      } catch (err) { keysNote.textContent = err.message; }
+    });
+    actions.appendChild(del);
+    tr.appendChild(actions);
+    return tr;
+  }
+
+  async function loadKeys() {
+    try {
+      const keys = await apiUsers("/api/keys", "GET");
+      keysBody.innerHTML = "";
+      keys.forEach((k) => keysBody.appendChild(keyRow(k)));
+    } catch (err) {
+      document.getElementById("keys-table").hidden = true;
+      document.getElementById("add-key").hidden = true;
+      keysNote.textContent = "You need to be an admin to manage keys.";
+    }
+  }
+
+  document.getElementById("add-key").addEventListener("click", async () => {
+    const name = prompt("Name this key (e.g. Home Assistant):");
+    if (!name || !name.trim()) return;
+    const asViewer = confirm("OK = member key (can act: create cards, pop up displays).\nCancel = viewer key (read-only).");
+    try {
+      const key = await apiUsers("/api/keys", "POST", {
+        name: name.trim(),
+        role: asViewer ? "member" : "viewer",
+      });
+      prompt("Copy the key now; it is not shown again:", key.token);
+      keysNote.textContent = "";
+      await loadKeys();
+    } catch (err) { keysNote.textContent = err.message; }
+  });
+
+  loadKeys();
+
   document.getElementById("import-file").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     const note = document.getElementById("backup-note");

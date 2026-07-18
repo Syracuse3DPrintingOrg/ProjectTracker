@@ -50,6 +50,19 @@
     <span class="assist-note" id="users-note"></span>
   </div>
 
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">API keys</h2>
+  <p class="muted">For Home Assistant and scripts. A key acts with the role you give it
+    (member can act, viewer can only read) and is sent as an <code>X-API-Key</code>
+    header. The key itself is shown once, when you create it. Ready-made HA
+    configuration lives in <code>homeassistant/sq.yaml</code> in the repo.</p>
+  <table style="width: 100%; border-collapse: collapse;" id="keys-table">
+    <tbody id="keys-body"></tbody>
+  </table>
+  <div class="dialog-actions">
+    <button type="button" class="primary" id="add-key">Create key</button>
+    <span class="assist-note" id="keys-note"></span>
+  </div>
+
   <h2 style="font-size: 1rem; margin-top: 1.6rem;">Backup</h2>
   <p class="muted">The download holds every project, column, and card as JSON.
     Restoring replaces everything with the file's contents.</p>

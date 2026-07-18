@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-16
+
+### Added
+
+- **Home Assistant integration.** A new `/api/ha/summary` endpoint feeds
+  HA REST sensors: today's remaining count, the task list, overdue
+  cards, per-project open counts, and your stalest neglected project.
+  Ready-to-paste configuration (sensors, TV display pop-up commands,
+  card-creating rest_commands, and a cheeky leaving-home reminder
+  automation) ships in `homeassistant/sq.yaml`.
+- **API keys.** Create keys under Settings for Home Assistant and
+  scripts: each has a name and a role (member acts, viewer reads,
+  neither administers), is sent as an `X-API-Key` header, and is shown
+  exactly once. Revoke instantly from the same table.
+- **Members can pop up displays.** Triggering a TV display (show, hide,
+  sleep) now needs only member rights, so automations and family members
+  can put the list on screen; display configuration stays admin-only.
+
 ## [0.8.0] - 2026-07-16
 
 ### Added

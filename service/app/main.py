@@ -13,6 +13,7 @@ from .routers import (
     connectors_router,
     display,
     displays_router,
+    integrations_router,
     llm_router,
     pages,
     settings_router,
@@ -58,9 +59,15 @@ async def session_guard(request: Request, call_next):
         if path == "/api/connectors/claude-code" and request.method == "POST":
             open_path = True
         user = None
-        uid = auth.session_user_id(request.cookies.get(auth.SESSION_COOKIE))
-        if uid is not None:
-            user = users_svc.get_user(uid)
+        api_key = request.headers.get("x-api-key")
+        if api_key:
+            from .services import api_keys as api_keys_svc
+
+            user = api_keys_svc.verify(api_key)
+        if user is None:
+            uid = auth.session_user_id(request.cookies.get(auth.SESSION_COOKIE))
+            if uid is not None:
+                user = users_svc.get_user(uid)
         if user:
             request.state.user = user
         elif not (open_path or display_ok):
@@ -86,5 +93,6 @@ app.include_router(display.router)
 app.include_router(displays_router.router)
 app.include_router(connectors_router.router)
 app.include_router(users_router.router)
+app.include_router(integrations_router.router)
 app.include_router(llm_router.router)
 app.include_router(settings_router.router)

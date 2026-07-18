@@ -52,6 +52,14 @@ CREATE TABLE IF NOT EXISTS users (
     disabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS api_keys (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    role TEXT NOT NULL DEFAULT 'member',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used TEXT NOT NULL DEFAULT ''
+);
 CREATE INDEX IF NOT EXISTS idx_cards_column ON cards(column_id, position);
 CREATE INDEX IF NOT EXISTS idx_cards_today ON cards(today, today_position);
 """

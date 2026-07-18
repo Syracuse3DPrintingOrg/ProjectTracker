@@ -1,0 +1,73 @@
+# SQ in Home Assistant.
+#
+# 1. In SQ: Settings, API keys, Create key (member role for the
+#    rest_commands below; viewer is enough for just the sensors).
+# 2. Put the key in HA's secrets.yaml:  sq_api_key: "sq_..."
+# 3. Replace 192.168.1.170:9280 below with your SQ address (use the LAN
+#    address, not a reverse-proxied public one), include this file or
+#    paste the pieces, restart HA.
+
+rest:
+  - resource: http://192.168.1.170:9280/api/ha/summary
+    headers:
+      X-API-Key: !secret sq_api_key
+    scan_interval: 120
+    sensor:
+      - name: SQ today remaining
+        unique_id: sq_today_remaining
+        value_template: "{{ value_json.today_remaining }}"
+        icon: mdi:rodent
+        json_attributes:
+          - today_tasks
+          - today_count
+          - projects
+          - stalest
+      - name: SQ overdue
+        unique_id: sq_overdue
+        value_template: "{{ value_json.overdue }}"
+        icon: mdi:alert-circle-outline
+
+rest_command:
+  # Pop the Today list up on a registered Android TV display.
+  # Display ids are on the SQ Displays page (the d= value in its URL).
+  sq_show_tv:
+    url: "http://192.168.1.170:9280/api/displays/{{ display_id }}/tv/show"
+    method: post
+    headers:
+      X-API-Key: !secret sq_api_key
+  sq_hide_tv:
+    url: "http://192.168.1.170:9280/api/displays/{{ display_id }}/tv/hide"
+    method: post
+    headers:
+      X-API-Key: !secret sq_api_key
+
+  # Drop a card straight onto a board from an automation.
+  sq_add_card:
+    url: "http://192.168.1.170:9280/api/cards"
+    method: post
+    content_type: application/json
+    headers:
+      X-API-Key: !secret sq_api_key
+    payload: >-
+      {"project_id": {{ project_id }}, "column_id": {{ column_id }},
+       "title": {{ title | tojson }}, "priority": {{ priority | default(2) }}}
+
+# Example automation: when the last person leaves and tasks remain,
+# nag on the phone. The squirrel does not clock out.
+automation:
+  - alias: SQ reminds you on the way out
+    trigger:
+      - platform: state
+        entity_id: zone.home
+        to: "0"
+    condition:
+      - condition: numeric_state
+        entity_id: sensor.sq_today_remaining
+        above: 0
+    action:
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "SQ"
+          message: >-
+            {{ states('sensor.sq_today_remaining') }} of today's tasks are
+            still open. Just saying.

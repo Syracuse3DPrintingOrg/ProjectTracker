@@ -56,6 +56,11 @@ SQLite file, no accounts to create.
   their own tokens, so devices never see a login page.
 - **Backup**: one JSON download from Settings holds everything and
   restores in place.
+- **Home Assistant**: REST sensors for today's tasks and overdue counts,
+  service calls that pop the list onto a TV or create cards from
+  automations, all authenticated with an API key from Settings.
+  Ready-made configuration in
+  [`homeassistant/sq.yaml`](homeassistant/sq.yaml).
 - **Claude Code dashboard**: see what Claude Code is doing across your
   machines: active repos, sessions working versus waiting for input, and
   each repo's beads issue counts. Run

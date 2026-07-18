@@ -12,17 +12,26 @@ READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 ADMIN_WRITE_PREFIXES = (
     "/api/settings",
     "/api/users",
+    "/api/keys",
     "/api/import",
     "/api/displays",
     "/api/connectors",
 )
 
 # Reads that are still admin-only (a full backup is the whole database,
-# and the user list is the admin's business).
-ADMIN_READ_PATHS = ("/api/export", "/api/users")
+# and the user and key lists are the admin's business).
+ADMIN_READ_PATHS = ("/api/export", "/api/users", "/api/keys")
 
 # Writes any signed-in user may make (self-service).
 SELF_SERVICE_PREFIXES = ("/api/account",)
+
+
+import re
+
+# Display TV actions (show, hide, sleep, status) are operational, not
+# configuration: any member (or member API key, e.g. a Home Assistant
+# automation) may pop a display up.
+_TV_ACTION = re.compile(r"^/api/displays/[^/]+/tv/[a-z]+$")
 
 
 def allowed(role: str, method: str, path: str) -> bool:
@@ -33,6 +42,8 @@ def allowed(role: str, method: str, path: str) -> bool:
     if path.startswith(SELF_SERVICE_PREFIXES):
         return True
     if role == "member":
+        if _TV_ACTION.match(path):
+            return True
         return not path.startswith(ADMIN_WRITE_PREFIXES)
     return False  # viewers do not write
 
