@@ -7,7 +7,7 @@
 # The GPIO35 button pages through the list when it does not fit.
 
 substitutions:
-  base_url: "http://192.168.1.170:9280"
+  base_url: "http://192.168.1.50:9280"
   display_token: ""
   poll: 30s
 

@@ -3,7 +3,7 @@
 
 Run this on any machine where Claude Code works:
 
-    python3 claude-code-connector.py --url http://192.168.1.170:9280 --token XXXX
+    python3 claude-code-connector.py --url http://192.168.1.50:9280 --token XXXX
 
 Every interval it scans Claude Code's local session transcripts
 (~/.claude/projects) and each repo's beads export (.beads/issues.jsonl),

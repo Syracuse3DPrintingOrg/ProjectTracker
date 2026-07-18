@@ -4,7 +4,7 @@
 # Run on Raspberry Pi OS (Lite is enough, Bookworm or newer) as a user
 # with sudo:
 #
-#   ./pi-display-setup.sh "http://192.168.1.170:9280/display?d=abc123"
+#   ./pi-display-setup.sh "http://192.168.1.50:9280/display?d=abc123"
 #   ./pi-display-setup.sh "http://..." --rotate 90
 #
 # It installs cage (a minimal Wayland compositor) plus Chromium, and a
