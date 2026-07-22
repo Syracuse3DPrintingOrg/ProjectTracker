@@ -70,6 +70,103 @@ def set_project_status(project_id: int, status: str) -> None:
         )
 
 
+def set_project_description(project_id: int, text: str) -> None:
+    with database.connect() as conn:
+        conn.execute(
+            "UPDATE projects SET description = ? WHERE id = ?", (text, project_id)
+        )
+
+
+# Caps for the overview page lists; the counts stay exact.
+OVERVIEW_DONE_CAP = 100
+OVERVIEW_FILE_CAP = 100
+OVERVIEW_ACTIVITY_CAP = 30
+
+
+def project_overview(project_id: int) -> dict:
+    """Everything the project overview page shows, in a handful of
+    queries: open work, finished work, the project's files, recent
+    activity, and the headline counts.
+
+    Both card lists are top-level cards only; subtasks surface through
+    their parent's progress numbers. Days quiet counts from the newest
+    card update anywhere in the project, subtasks included."""
+    card_select = (
+        "SELECT cards.*, columns.name AS column_name,"
+        " users.username AS assignee"
+        " FROM cards"
+        " JOIN columns ON columns.id = cards.column_id"
+        " LEFT JOIN users ON users.id = cards.assignee_id"
+        " WHERE cards.project_id = ? AND cards.parent_id IS NULL"
+    )
+    with database.connect() as conn:
+        open_cards = _rows(
+            conn.execute(
+                card_select + " AND columns.is_done = 0"
+                " ORDER BY columns.position, columns.id, cards.position, cards.id",
+                (project_id,),
+            )
+        )
+        done_cards = _rows(
+            conn.execute(
+                card_select + " AND columns.is_done = 1"
+                " ORDER BY cards.updated_at DESC, cards.id DESC LIMIT ?",
+                (project_id, OVERVIEW_DONE_CAP),
+            )
+        )
+        files = _rows(
+            conn.execute(
+                "SELECT attachments.id, attachments.filename, attachments.size,"
+                " attachments.created_at, cards.id AS card_id,"
+                " cards.title AS card_title"
+                " FROM attachments JOIN cards ON cards.id = attachments.card_id"
+                " WHERE cards.project_id = ?"
+                " ORDER BY attachments.id DESC LIMIT ?",
+                (project_id, OVERVIEW_FILE_CAP),
+            )
+        )
+        activity = _rows(
+            conn.execute(
+                "SELECT card_events.*, cards.title AS card_title"
+                " FROM card_events JOIN cards ON cards.id = card_events.card_id"
+                " WHERE cards.project_id = ?"
+                " ORDER BY card_events.id DESC LIMIT ?",
+                (project_id, OVERVIEW_ACTIVITY_CAP),
+            )
+        )
+        tallies = conn.execute(
+            "SELECT COALESCE(SUM(CASE WHEN cards.parent_id IS NULL"
+            "   AND columns.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_n,"
+            " CAST(julianday('now') - julianday(COALESCE(MAX(cards.updated_at),"
+            "   (SELECT created_at FROM projects WHERE id = ?)))"
+            "   AS INTEGER) AS days_quiet"
+            " FROM cards JOIN columns ON columns.id = cards.column_id"
+            " WHERE cards.project_id = ?",
+            (project_id, project_id),
+        ).fetchone()
+        file_count = conn.execute(
+            "SELECT COUNT(*) FROM attachments"
+            " JOIN cards ON cards.id = attachments.card_id"
+            " WHERE cards.project_id = ?",
+            (project_id,),
+        ).fetchone()[0]
+    progress = subtask_progress(project_id)
+    for c in open_cards:
+        c["subtasks_done"], c["subtasks_total"] = progress.get(c["id"], (0, 0))
+    return {
+        "open_cards": open_cards,
+        "done_cards": done_cards,
+        "files": files,
+        "activity": activity,
+        "counts": {
+            "open": len(open_cards),
+            "done": tallies["done_n"],
+            "files": file_count,
+            "days_quiet": tallies["days_quiet"] or 0,
+        },
+    }
+
+
 def nudge_data(exclude_project_id: int | None = None) -> list[dict]:
     """The guilt list: active projects with open cards, stalest first.
 
@@ -307,7 +404,8 @@ def get_card(card_id: int) -> dict | None:
 def create_card(project_id: int, column_id: int, title: str, **fields) -> dict:
     with database.connect() as conn:
         pos = conn.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM cards WHERE column_id = ?",
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM cards"
+            " WHERE column_id = ? AND parent_id IS NULL",
             (column_id,),
         ).fetchone()[0]
         cur = conn.execute(
@@ -343,15 +441,50 @@ def update_card(card_id: int, **fields) -> dict | None:
 
 
 def delete_card(card_id: int) -> None:
+    """Delete a card. Its children are promoted to top level, not deleted:
+    each stays in the column it sits in (so a finished child stays
+    finished) and lands at the end of that column."""
     with database.connect() as conn:
+        card = conn.execute(
+            "SELECT parent_id, column_id FROM cards WHERE id = ?", (card_id,)
+        ).fetchone()
+        if not card:
+            return
+        children = conn.execute(
+            "SELECT id, column_id FROM cards WHERE parent_id = ?"
+            " ORDER BY position, id",
+            (card_id,),
+        ).fetchall()
+        ends: dict[int, int] = {}
+        for child in children:
+            col = child["column_id"]
+            if col not in ends:
+                ends[col] = conn.execute(
+                    "SELECT COALESCE(MAX(position), -1) + 1 FROM cards"
+                    " WHERE column_id = ? AND parent_id IS NULL",
+                    (col,),
+                ).fetchone()[0]
+            conn.execute(
+                "UPDATE cards SET parent_id = NULL, position = ?,"
+                " updated_at = datetime('now') WHERE id = ?",
+                (ends[col], child["id"]),
+            )
+            ends[col] += 1
         conn.execute("DELETE FROM cards WHERE id = ?", (card_id,))
+        if card["parent_id"] is not None:
+            _renumber_children(conn, card["parent_id"])
+        else:
+            _renumber_column(conn, card["column_id"])
 
 
 def _renumber_column(conn, column_id: int) -> None:
+    """Renumber the top-level cards of a column. Child cards keep their
+    position as an order among siblings, so they stay out of this."""
     ids = [
         r["id"]
         for r in conn.execute(
-            "SELECT id FROM cards WHERE column_id = ? ORDER BY position, id",
+            "SELECT id FROM cards WHERE column_id = ? AND parent_id IS NULL"
+            " ORDER BY position, id",
             (column_id,),
         )
     ]
@@ -372,10 +505,28 @@ def move_card(card_id: int, column_id: int, position: int) -> dict | None:
         ).fetchone()
         if not target or target["project_id"] != card["project_id"]:
             return None
+        if card["parent_id"] is not None:
+            # A child card lives outside the column ordering: switching
+            # columns flips its done state, its position stays a sibling
+            # index. Recurring children still respawn on a done landing.
+            old_column = card["column_id"]
+            conn.execute(
+                "UPDATE cards SET column_id = ?, updated_at = datetime('now')"
+                " WHERE id = ?",
+                (column_id, card_id),
+            )
+            if (
+                card["recur_days"] > 0
+                and target["is_done"]
+                and old_column != column_id
+            ):
+                _respawn(conn, dict(card), column_id)
+            return get_card(card_id)
         ids = [
             r["id"]
             for r in conn.execute(
-                "SELECT id FROM cards WHERE column_id = ? ORDER BY position, id",
+                "SELECT id FROM cards WHERE column_id = ? AND parent_id IS NULL"
+                " ORDER BY position, id",
                 (column_id,),
             )
         ]
@@ -450,24 +601,26 @@ def search_cards(query: str, project_id: int | None = None, limit: int = 50) -> 
 
 
 def export_data() -> dict:
-    """Everything in the database, for backups."""
+    """Everything in the database, for backups. Subtasks are child cards,
+    so they ride along in the cards list through parent_id."""
     with database.connect() as conn:
         return {
             "projects": _rows(conn.execute("SELECT * FROM projects ORDER BY id")),
             "columns": _rows(conn.execute("SELECT * FROM columns ORDER BY id")),
             "cards": _rows(conn.execute("SELECT * FROM cards ORDER BY id")),
-            "subtasks": _rows(conn.execute("SELECT * FROM subtasks ORDER BY id")),
         }
 
 
 def import_data(data: dict) -> dict:
-    """Replace the whole database with an export. Counts what landed."""
+    """Replace the whole database with an export. Counts what landed.
+
+    Old backups carry a separate subtasks list; those rows land as child
+    cards, the same conversion the schema migration does."""
     projects = data.get("projects") or []
     columns = data.get("columns") or []
     cards = data.get("cards") or []
     subtasks = data.get("subtasks") or []
     with database.connect() as conn:
-        conn.execute("DELETE FROM subtasks")
         conn.execute("DELETE FROM cards")
         conn.execute("DELETE FROM columns")
         conn.execute("DELETE FROM projects")
@@ -493,22 +646,49 @@ def import_data(data: dict) -> dict:
             conn.execute(
                 "INSERT INTO cards (id, project_id, column_id, title, description,"
                 " labels, priority, due_date, today, today_position, recur_days,"
-                " assignee_id, position, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " assignee_id, parent_id, position, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
                 " COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))",
                 (c.get("id"), c["project_id"], c["column_id"], c.get("title", ""),
                  c.get("description", ""), c.get("labels", ""), c.get("priority", 2),
                  c.get("due_date", ""), c.get("today", 0), c.get("today_position", 0),
-                 c.get("recur_days", 0), c.get("assignee_id"), c.get("position", 0),
-                 c.get("created_at"), c.get("updated_at")),
+                 c.get("recur_days", 0), c.get("assignee_id"), c.get("parent_id"),
+                 c.get("position", 0), c.get("created_at"), c.get("updated_at")),
             )
-        for s in subtasks:
+        done_columns: dict[int, int | None] = {}
+        next_pos: dict[int, int] = {}
+        ordered = sorted(
+            subtasks,
+            key=lambda s: (s.get("card_id", 0), s.get("position", 0), s.get("id", 0)),
+        )
+        for s in ordered:
+            parent = conn.execute(
+                "SELECT project_id, column_id FROM cards WHERE id = ?",
+                (s.get("card_id"),),
+            ).fetchone()
+            if not parent:
+                continue
+            target = parent["column_id"]
+            if s.get("done"):
+                if parent["project_id"] not in done_columns:
+                    done_columns[parent["project_id"]] = database.first_done_column(
+                        conn, parent["project_id"]
+                    )
+                target = done_columns[parent["project_id"]] or target
+            if s["card_id"] not in next_pos:
+                next_pos[s["card_id"]] = conn.execute(
+                    "SELECT COALESCE(MAX(position), -1) + 1 FROM cards"
+                    " WHERE parent_id = ?",
+                    (s["card_id"],),
+                ).fetchone()[0]
             conn.execute(
-                "INSERT INTO subtasks (id, card_id, title, done, position,"
-                " created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
-                (s.get("id"), s["card_id"], s.get("title", ""), s.get("done", 0),
-                 s.get("position", 0), s.get("created_at")),
+                "INSERT INTO cards (project_id, column_id, title, parent_id,"
+                " position, created_at)"
+                " VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
+                (parent["project_id"], target, s.get("title", ""), s["card_id"],
+                 next_pos[s["card_id"]], s.get("created_at")),
             )
+            next_pos[s["card_id"]] += 1
     return {"projects": len(projects), "columns": len(columns), "cards": len(cards)}
 
 
@@ -539,33 +719,168 @@ def list_due_cards(
         return _rows(conn.execute(query, args))
 
 
-# ---- subtasks ----
+# ---- subtasks (child cards) ----
+#
+# A subtask is a card whose parent_id points at another card in the same
+# project, one level deep. Done means the child sits in a done column. A
+# child's position is its order among siblings; column ordering ignores
+# children entirely. The functions below keep the old subtask wire shape
+# ({id, card_id, title, done, position}) so the board and any callers of
+# the /api/subtasks endpoints keep working unchanged.
+
+def _child_rows(conn, parent_id: int) -> list[dict]:
+    return _rows(
+        conn.execute(
+            "SELECT cards.*, columns.is_done AS done FROM cards"
+            " JOIN columns ON columns.id = cards.column_id"
+            " WHERE cards.parent_id = ? ORDER BY cards.position, cards.id",
+            (parent_id,),
+        )
+    )
+
+
+def _subtask_shape(child: dict, index: int) -> dict:
+    return {
+        "id": child["id"],
+        "card_id": child["parent_id"],
+        "title": child["title"],
+        "done": child["done"],
+        "position": index,
+        "created_at": child["created_at"],
+    }
+
+
+def has_children(card_id: int) -> bool:
+    with database.connect() as conn:
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM cards WHERE parent_id = ? LIMIT 1", (card_id,)
+            ).fetchone()
+        )
+
+
+def children_map(project_id: int) -> dict[int, list[dict]]:
+    """{parent_id: [child cards]} for the board page, each child carrying
+    a done flag from its column, in sibling order."""
+    with database.connect() as conn:
+        rows = _rows(
+            conn.execute(
+                "SELECT cards.*, columns.is_done AS done FROM cards"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE cards.project_id = ? AND cards.parent_id IS NOT NULL"
+                " ORDER BY cards.position, cards.id",
+                (project_id,),
+            )
+        )
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["parent_id"], []).append(r)
+    return out
+
+
+def _renumber_children(conn, parent_id: int) -> None:
+    ids = [
+        r["id"]
+        for r in conn.execute(
+            "SELECT id FROM cards WHERE parent_id = ? ORDER BY position, id",
+            (parent_id,),
+        )
+    ]
+    for i, cid in enumerate(ids):
+        conn.execute("UPDATE cards SET position = ? WHERE id = ?", (i, cid))
+
+
+def set_parent(card_id: int, parent_id: int | None) -> dict | None:
+    """Nest a card under a parent, or promote it to top level.
+
+    Validity (same project, one level, not self) is the caller's job;
+    this handles the position bookkeeping on both sides."""
+    with database.connect() as conn:
+        card = conn.execute(
+            "SELECT * FROM cards WHERE id = ?", (card_id,)
+        ).fetchone()
+        if not card:
+            return None
+        old_parent = card["parent_id"]
+        if parent_id is None:
+            if old_parent is None:
+                return get_card(card_id)
+            end = conn.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM cards"
+                " WHERE column_id = ? AND parent_id IS NULL",
+                (card["column_id"],),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE cards SET parent_id = NULL, position = ?,"
+                " updated_at = datetime('now') WHERE id = ?",
+                (end, card_id),
+            )
+            _renumber_children(conn, old_parent)
+        else:
+            pos = conn.execute(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM cards"
+                " WHERE parent_id = ?",
+                (parent_id,),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE cards SET parent_id = ?, position = ?,"
+                " updated_at = datetime('now') WHERE id = ?",
+                (parent_id, pos, card_id),
+            )
+            if old_parent is None:
+                # The card left the column's top-level flow.
+                _renumber_column(conn, card["column_id"])
+            elif old_parent != parent_id:
+                _renumber_children(conn, old_parent)
+    return get_card(card_id)
+
 
 def list_subtasks(card_id: int) -> list[dict]:
     with database.connect() as conn:
-        return _rows(
-            conn.execute(
-                "SELECT * FROM subtasks WHERE card_id = ? ORDER BY position, id",
-                (card_id,),
-            )
-        )
+        children = _child_rows(conn, card_id)
+    return [_subtask_shape(c, i) for i, c in enumerate(children)]
 
 
-def create_subtask(card_id: int, title: str) -> dict:
+def create_subtask(card_id: int, title: str) -> dict | None:
+    """Add a child card in the parent's column. Returns None when the
+    parent is missing or is itself a child (one level only)."""
+    parent = get_card(card_id)
+    if not parent or parent["parent_id"] is not None:
+        return None
     with database.connect() as conn:
         pos = conn.execute(
-            "SELECT COALESCE(MAX(position), -1) + 1 FROM subtasks WHERE card_id = ?",
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM cards WHERE parent_id = ?",
             (card_id,),
         ).fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO subtasks (card_id, title, position) VALUES (?, ?, ?)",
-            (card_id, title.strip(), pos),
+            "INSERT INTO cards (project_id, column_id, title, parent_id, position)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (parent["project_id"], parent["column_id"], title.strip(), card_id, pos),
         )
-        return dict(
-            conn.execute(
-                "SELECT * FROM subtasks WHERE id = ?", (cur.lastrowid,)
-            ).fetchone()
+        child_id = cur.lastrowid
+        conn.execute(
+            "UPDATE cards SET updated_at = datetime('now') WHERE id = ?",
+            (card_id,),
         )
+    for i, s in enumerate(list_subtasks(card_id)):
+        if s["id"] == child_id:
+            return s
+    return None
+
+
+def _set_child_done(conn, child: dict, done: bool) -> None:
+    current = conn.execute(
+        "SELECT is_done FROM columns WHERE id = ?", (child["column_id"],)
+    ).fetchone()
+    if current and bool(current["is_done"]) == done:
+        return
+    target = conn.execute(
+        "SELECT id FROM columns WHERE project_id = ? AND is_done = ?"
+        " ORDER BY position, id LIMIT 1",
+        (child["project_id"], 1 if done else 0),
+    ).fetchone()
+    if target:
+        move_card(child["id"], target["id"], 0)
 
 
 def update_subtask(
@@ -574,60 +889,62 @@ def update_subtask(
     done: bool | None = None,
     position: int | None = None,
 ) -> dict | None:
+    child = get_card(subtask_id)
+    if not child or child["parent_id"] is None:
+        return None
+    parent_id = child["parent_id"]
+    if title is not None and title.strip():
+        update_card(subtask_id, title=title.strip())
     with database.connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM subtasks WHERE id = ?", (subtask_id,)
-        ).fetchone()
-        if not row:
-            return None
-        if title is not None and title.strip():
-            conn.execute(
-                "UPDATE subtasks SET title = ? WHERE id = ?",
-                (title.strip(), subtask_id),
-            )
         if done is not None:
-            conn.execute(
-                "UPDATE subtasks SET done = ? WHERE id = ?",
-                (1 if done else 0, subtask_id),
-            )
+            _set_child_done(conn, child, done)
         if position is not None:
             ids = [
                 r["id"]
                 for r in conn.execute(
-                    "SELECT id FROM subtasks WHERE card_id = ? ORDER BY position, id",
-                    (row["card_id"],),
+                    "SELECT id FROM cards WHERE parent_id = ? ORDER BY position, id",
+                    (parent_id,),
                 )
             ]
             ids.remove(subtask_id)
             position = max(0, min(position, len(ids)))
             ids.insert(position, subtask_id)
-            for i, sid in enumerate(ids):
-                conn.execute("UPDATE subtasks SET position = ? WHERE id = ?", (i, sid))
+            for i, cid in enumerate(ids):
+                conn.execute("UPDATE cards SET position = ? WHERE id = ?", (i, cid))
         conn.execute(
             "UPDATE cards SET updated_at = datetime('now') WHERE id = ?",
-            (row["card_id"],),
+            (parent_id,),
         )
-        return dict(
-            conn.execute("SELECT * FROM subtasks WHERE id = ?", (subtask_id,)).fetchone()
-        )
+    for s in list_subtasks(parent_id):
+        if s["id"] == subtask_id:
+            return s
+    return None
 
 
 def delete_subtask(subtask_id: int) -> bool:
+    """Delete a child card. Top-level cards are not this function's to
+    delete; use delete_card for those."""
+    child = get_card(subtask_id)
+    if not child or child["parent_id"] is None:
+        return False
     with database.connect() as conn:
-        cur = conn.execute("DELETE FROM subtasks WHERE id = ?", (subtask_id,))
-        return cur.rowcount > 0
+        conn.execute("DELETE FROM cards WHERE id = ?", (subtask_id,))
+        _renumber_children(conn, child["parent_id"])
+    return True
 
 
 def subtask_progress(project_id: int) -> dict[int, tuple[int, int]]:
-    """{card_id: (done, total)} for every card in the project."""
+    """{card_id: (done, total)} over child cards, for every parent in the
+    project. Done means the child sits in a done column."""
     with database.connect() as conn:
         return {
-            r["card_id"]: (r["done_n"], r["total_n"])
+            r["parent_id"]: (r["done_n"] or 0, r["total_n"])
             for r in conn.execute(
-                "SELECT subtasks.card_id, SUM(subtasks.done) AS done_n,"
-                " COUNT(*) AS total_n FROM subtasks"
-                " JOIN cards ON cards.id = subtasks.card_id"
-                " WHERE cards.project_id = ? GROUP BY subtasks.card_id",
+                "SELECT cards.parent_id, SUM(columns.is_done) AS done_n,"
+                " COUNT(*) AS total_n FROM cards"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE cards.project_id = ? AND cards.parent_id IS NOT NULL"
+                " GROUP BY cards.parent_id",
                 (project_id,),
             )
         }
@@ -644,10 +961,12 @@ def subtask_progress_for_cards(card_ids: list[int]) -> dict[int, tuple[int, int]
     marks = ",".join("?" for _ in card_ids)
     with database.connect() as conn:
         return {
-            r["card_id"]: (r["d"] or 0, r["t"])
+            r["parent_id"]: (r["d"] or 0, r["t"])
             for r in conn.execute(
-                f"SELECT card_id, SUM(done) AS d, COUNT(*) AS t FROM subtasks"
-                f" WHERE card_id IN ({marks}) GROUP BY card_id",
+                f"SELECT cards.parent_id, SUM(columns.is_done) AS d,"
+                f" COUNT(*) AS t FROM cards"
+                f" JOIN columns ON columns.id = cards.column_id"
+                f" WHERE cards.parent_id IN ({marks}) GROUP BY cards.parent_id",
                 card_ids,
             )
         }

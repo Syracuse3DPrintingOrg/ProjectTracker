@@ -13,6 +13,7 @@
     <option value="buried" {% if project.status == "buried" %}selected{% endif %}>&#127793; Buried for later</option>
     <option value="cracked" {% if project.status == "cracked" %}selected{% endif %}>&#9989; Cracked it</option>
   </select>
+  <a class="btn" href="/project/{{ project.id }}/overview">Overview</a>
   <button id="new-project">New project</button>
   <button id="rename-project">Rename</button>
   <button id="archive-project" class="danger">Archive</button>

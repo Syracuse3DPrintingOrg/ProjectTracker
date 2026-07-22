@@ -32,6 +32,7 @@ class ProjectIn(BaseModel):
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     status: str | None = None
+    description: str | None = Field(default=None, max_length=20000)
 
 
 class ColumnIn(BaseModel):
@@ -65,6 +66,8 @@ class CardUpdate(BaseModel):
     recur_days: int | None = Field(default=None, ge=0, le=365)
     assignee_id: int | None = None
     clear_assignee: bool = False
+    parent_id: int | None = None
+    clear_parent: bool = False
 
 
 class SubtaskIn(BaseModel):
@@ -127,6 +130,8 @@ def update_project(project_id: int, body: ProjectUpdate):
         if body.status not in store.PROJECT_STATUSES:
             raise HTTPException(422, f"status must be one of {store.PROJECT_STATUSES}")
         store.set_project_status(project_id, body.status)
+    if body.description is not None:
+        store.set_project_description(project_id, body.description.strip())
     return store.get_project(project_id)
 
 
@@ -227,6 +232,25 @@ def update_card(card_id: int, body: CardUpdate, request: Request):
     if not card:
         raise HTTPException(404)
     updates = body.model_dump(exclude_unset=True)
+    clear_parent = updates.pop("clear_parent", False)
+    new_parent = updates.pop("parent_id", None)
+    if new_parent is not None:
+        parent = store.get_card(new_parent)
+        if not parent:
+            raise HTTPException(422, "no card to nest under")
+        if new_parent == card_id:
+            raise HTTPException(422, "a card cannot be its own subtask")
+        if parent["project_id"] != card["project_id"]:
+            raise HTTPException(422, "subtasks stay within their project")
+        if parent["parent_id"] is not None:
+            raise HTTPException(422, "subtasks only nest one level deep")
+        if store.has_children(card_id):
+            raise HTTPException(
+                422, "a card with subtasks of its own cannot become a subtask"
+            )
+        store.set_parent(card_id, new_parent)
+    elif clear_parent:
+        store.set_parent(card_id, None)
     clear = updates.pop("clear_assignee", False)
     if clear:
         updates["assignee_id"] = None
@@ -272,7 +296,7 @@ def move_card(card_id: int, body: MoveIn, request: Request):
     return card
 
 
-# ---- subtasks ----
+# ---- subtasks (child cards behind the old wire shape) ----
 
 @router.get("/cards/{card_id}/subtasks")
 def list_subtasks(card_id: int):
@@ -283,8 +307,11 @@ def list_subtasks(card_id: int):
 
 @router.post("/cards/{card_id}/subtasks", status_code=201)
 def create_subtask(card_id: int, body: SubtaskIn):
-    if not store.get_card(card_id):
+    card = store.get_card(card_id)
+    if not card:
         raise HTTPException(404)
+    if card["parent_id"] is not None:
+        raise HTTPException(422, "subtasks only nest one level deep")
     return store.create_subtask(card_id, body.title)
 
 
@@ -298,6 +325,12 @@ def update_subtask(subtask_id: int, body: SubtaskUpdate):
 
 @router.delete("/subtasks/{subtask_id}", status_code=204)
 def delete_subtask(subtask_id: int):
+    from ..services import attachments
+
+    child = store.get_card(subtask_id)
+    if not child or child["parent_id"] is None:
+        raise HTTPException(404)
+    attachments.delete_files_for_card(subtask_id)
     if not store.delete_subtask(subtask_id):
         raise HTTPException(404)
 

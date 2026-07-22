@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS projects (
     archived INTEGER NOT NULL DEFAULT 0,
     claude_path TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active',
+    description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS columns (
@@ -41,6 +42,7 @@ CREATE TABLE IF NOT EXISTS cards (
     today_position INTEGER NOT NULL DEFAULT 0,
     recur_days INTEGER NOT NULL DEFAULT 0,
     assignee_id INTEGER,
+    parent_id INTEGER,
     position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -53,14 +55,6 @@ CREATE TABLE IF NOT EXISTS users (
     disabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE TABLE IF NOT EXISTS subtasks (
-    id INTEGER PRIMARY KEY,
-    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    done INTEGER NOT NULL DEFAULT 0,
-    position INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 CREATE TABLE IF NOT EXISTS card_events (
     id INTEGER PRIMARY KEY,
     card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
@@ -69,7 +63,6 @@ CREATE TABLE IF NOT EXISTS card_events (
     text TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_subtasks_card ON subtasks(card_id, position);
 CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id, id);
 CREATE TABLE IF NOT EXISTS attachments (
     id INTEGER PRIMARY KEY,
@@ -127,6 +120,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE projects ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
         )
+    if "description" not in project_cols:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+        )
     column_cols = {r["name"] for r in conn.execute("PRAGMA table_info(columns)")}
     if "wip_limit" not in column_cols:
         conn.execute(
@@ -139,6 +136,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
     if "assignee_id" not in card_cols:
         conn.execute("ALTER TABLE cards ADD COLUMN assignee_id INTEGER")
+    # Subtasks became child cards: a plain INTEGER (SQLite cannot add a
+    # foreign key with ALTER TABLE) pointing at the parent card. A child's
+    # position is its order among siblings, not a column slot.
+    if "parent_id" not in card_cols:
+        conn.execute("ALTER TABLE cards ADD COLUMN parent_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)")
+    _convert_legacy_subtasks(conn)
     # Personal Today lists arrived after 0.x installs shipped; the shared
     # list stays in cards.today untouched, personal picks live here.
     conn.execute(
@@ -148,3 +152,53 @@ def _migrate(conn: sqlite3.Connection) -> None:
         " position INTEGER NOT NULL DEFAULT 0,"
         " PRIMARY KEY (user_id, card_id))"
     )
+
+
+def first_done_column(conn: sqlite3.Connection, project_id: int) -> int | None:
+    row = conn.execute(
+        "SELECT id FROM columns WHERE project_id = ? AND is_done = 1"
+        " ORDER BY position, id LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    return row["id"] if row else None
+
+
+def _convert_legacy_subtasks(conn: sqlite3.Connection) -> None:
+    """Turn every row of the old subtasks table into a child card.
+
+    A subtask lands in its parent's project, keeps its title and order,
+    and points back at the parent through parent_id. Done subtasks go to
+    the project's first done column (falling back to the parent's column)
+    so their finished state survives. The old table is dropped afterward.
+    """
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'subtasks'"
+    ).fetchone()
+    if not exists:
+        return
+    rows = conn.execute(
+        "SELECT subtasks.*, cards.project_id AS parent_project,"
+        " cards.column_id AS parent_column"
+        " FROM subtasks JOIN cards ON cards.id = subtasks.card_id"
+        " ORDER BY subtasks.card_id, subtasks.position, subtasks.id"
+    ).fetchall()
+    done_columns: dict[int, int | None] = {}
+    next_pos: dict[int, int] = {}
+    for r in rows:
+        target = r["parent_column"]
+        if r["done"]:
+            if r["parent_project"] not in done_columns:
+                done_columns[r["parent_project"]] = first_done_column(
+                    conn, r["parent_project"]
+                )
+            target = done_columns[r["parent_project"]] or target
+        pos = next_pos.get(r["card_id"], 0)
+        next_pos[r["card_id"]] = pos + 1
+        conn.execute(
+            "INSERT INTO cards (project_id, column_id, title, parent_id,"
+            " position, created_at)"
+            " VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
+            (r["parent_project"], target, r["title"], r["card_id"], pos,
+             r["created_at"]),
+        )
+    conn.execute("DROP TABLE subtasks")

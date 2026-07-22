@@ -103,11 +103,25 @@ def embedded_preview(attachment_id: int):
     path = attachments.path_for(att)
     if not path.is_file():
         raise HTTPException(410, "the stored file is gone")
-    found = mesh_convert.extract_solidworks_preview(path)
+    found = mesh_convert.extract_embedded_preview(path)
     if not found:
         raise HTTPException(404, "no embedded preview in this file")
     data, mime = found
     return Response(data, media_type=mime)
+
+
+@router.get("/attachments/{attachment_id}/file-as-pdf")
+def file_as_pdf(attachment_id: int):
+    """Illustrator files saved with PDF compatibility, served as PDF so
+    the browser's viewer renders them."""
+    att = attachments.get(attachment_id)
+    if not att:
+        raise HTTPException(404)
+    path = attachments.path_for(att)
+    if not path.is_file():
+        raise HTTPException(410, "the stored file is gone")
+    return FileResponse(path, media_type="application/pdf", filename=att["filename"],
+                        content_disposition_type="inline")
 
 
 @router.delete("/attachments/{attachment_id}", status_code=204)

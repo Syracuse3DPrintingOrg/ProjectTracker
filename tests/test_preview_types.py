@@ -132,7 +132,7 @@ def test_solidworks_with_embedded_preview(client, monkeypatch):
     # With an extractable thumbnail: image preview via the embedded route.
     png = b"\x89PNG\r\n\x1a\nfakepngdata"
     monkeypatch.setattr(
-        mesh_convert, "extract_solidworks_preview", lambda p: (png, "image/png")
+        mesh_convert, "extract_embedded_preview", lambda p: (png, "image/png")
     )
     pv = client.get(f"/api/attachments/{att['id']}/preview").json()
     assert pv["kind"] == "image"
@@ -156,3 +156,80 @@ def test_pdf_still_previews(client):
     pv = client.get(f"/api/attachments/{att['id']}/preview").json()
     assert pv["kind"] == "pdf"
     assert pv["url"].endswith("/file")
+
+
+# ---- embedded preview extraction internals ----
+
+def make_dib(width=2, height=2):
+    import struct
+    stride = ((width * 24 + 31) // 32) * 4
+    pixels = b"\x00\x40\xff" * width + b"\x00" * (stride - 3 * width)
+    header = struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0,
+                         stride * height, 2835, 2835, 0, 0)
+    return header + pixels * height
+
+
+def test_dib_to_bmp_roundtrip():
+    bmp = mesh_convert._dib_to_bmp(make_dib())
+    assert bmp is not None and bmp.startswith(b"BM")
+    assert mesh_convert._dib_to_bmp(b"garbage") is None
+
+
+def test_image_from_bytes_variants():
+    png = b"\x89PNG\r\n\x1a\n" + b"x" * 50
+    assert mesh_convert._image_from_bytes(b"junk" + png)[1] == "image/png"
+    wmf_with_dib = b"\x01\x00\x09\x00" + b"\x00" * 20 + make_dib()
+    got = mesh_convert._image_from_bytes(wmf_with_dib)
+    assert got is not None and got[1] == "image/bmp"
+    assert mesh_convert._image_from_bytes(b"nothing here") is None
+
+
+def test_scan_prefers_hinted_then_largest():
+    png_small = b"\x89PNG\r\n\x1a\n" + b"a" * 10
+    png_big = b"\x89PNG\r\n\x1a\n" + b"b" * 500
+    got = mesh_convert.scan_streams_for_preview(
+        [("random-stream", png_big), ("PreviewPNG", png_small)]
+    )
+    assert got[0] == png_small  # the hinted stream wins even when smaller
+    got = mesh_convert.scan_streams_for_preview(
+        [("a", png_small), ("b", png_big)]
+    )
+    assert got[0] == png_big
+
+
+def test_vsdx_thumbnail_preview(client):
+    card = make_card(client)
+    png = b"\x89PNG\r\n\x1a\n" + b"visio-thumb" * 20
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("docProps/thumbnail.png", png)
+        z.writestr("visio/pages/page1.xml", "<xml/>")
+    att = upload(client, card["id"], "flow.vsdx", buf.getvalue())
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "image"
+    assert "Visio" in pv["note"]
+    got = client.get(f"/api/attachments/{att['id']}/embedded-preview")
+    assert got.status_code == 200 and got.content == png
+
+
+def test_illustrator_pdf_compatible(client):
+    card = make_card(client)
+    ai = b"%!PS-Adobe header junk %PDF-1.6 rest of pdf body"
+    att = upload(client, card["id"], "logo.ai", ai)
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "pdf"
+    got = client.get(pv["url"])
+    assert got.headers["content-type"].startswith("application/pdf")
+
+    plain = upload(client, card["id"], "old.ai", b"no pdf marker here")
+    pv = client.get(f"/api/attachments/{plain['id']}/preview").json()
+    assert pv["kind"] == "binary"
+    assert "PDF compatibility" in pv["note"]
+
+
+def test_diptrace_note(client):
+    card = make_card(client)
+    att = upload(client, card["id"], "board.dip", b"\x00" * 30)
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "model-unsupported"
+    assert "Gerber" in pv["note"]

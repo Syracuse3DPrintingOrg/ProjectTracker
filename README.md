@@ -17,10 +17,14 @@ SQLite file, no accounts to create.
   fresh due date). Drag cards between columns or reorder within one, on
   desktop or touch. Columns take optional work-in-progress limits.
 - **Attachments and previews**: drag any file onto a card. CSV and Excel
-  preview as tables, Word and text as text, images and PDFs inline, and
-  STL and STEP models in a built-in 3D viewer (the STEP converter ships
-  with SQ and runs in your browser). SolidWorks files are stored and
-  downloadable; export STEP or STL from SolidWorks for a preview.
+  preview as tables, Word and text as text, images, PDFs, video, and
+  audio inline, zip contents as a listing, and STL, STEP, IGES, 3MF, and
+  OBJ models in a built-in 3D viewer (the CAD converter ships with SQ
+  and runs in your browser). SolidWorks and Visio files show the preview
+  image saved inside them, the same one Windows Explorer shows; full
+  SolidWorks geometry needs a commercially licensed CAD kernel (that is
+  how the big quoting sites import it), so export STEP or STL for true
+  3D. Illustrator files saved with PDF compatibility preview as PDF.
 - **Hand a card to any AI**: one button packs a card into a
   self-contained prompt for Claude, ChatGPT, Gemini, or a Claude Code
   command; the built-in AI can also research approaches for a card.

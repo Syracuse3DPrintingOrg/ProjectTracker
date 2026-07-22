@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} overview · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="board-header overview-head">
+  <h1>{{ project.name }}</h1>
+  {% if project.status == "buried" %}<span class="chip status-chip">&#127793; Buried for later</span>
+  {% elif project.status == "cracked" %}<span class="chip status-chip">&#9989; Cracked it</span>
+  {% else %}<span class="chip status-chip">&#128063; Chasing</span>{% endif %}
+  <a class="btn" href="/project/{{ project.id }}" style="margin-left: auto;">Board</a>
+</div>
+
+<div class="overview">
+  <div class="panel overview-desc">
+    <div id="desc-view">
+      {% for para in description_paragraphs %}<p>{{ para }}</p>
+      {% else %}<p class="muted">No description yet.{% if can_edit %} What is this project about?{% endif %}</p>
+      {% endfor %}
+    </div>
+    {% if can_edit %}
+    <form id="desc-form" hidden>
+      <textarea id="desc-text" rows="5" maxlength="20000"
+                placeholder="What is this project about?">{{ project.description }}</textarea>
+      <div class="dialog-actions">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="desc-cancel">Cancel</button>
+        <span class="assist-note" id="desc-note"></span>
+      </div>
+    </form>
+    <button type="button" id="desc-edit" class="overview-edit">Edit description</button>
+    {% endif %}
+  </div>
+
+  <div class="stat-tiles">
+    <div class="stat-tile"><div class="stat-value">{{ counts.open }}</div><div class="stat-label">open tasks</div></div>
+    <div class="stat-tile"><div class="stat-value">{{ counts.done }}</div><div class="stat-label">finished</div></div>
+    <div class="stat-tile"><div class="stat-value">{{ counts.files }}</div><div class="stat-label">files</div></div>
+    <div class="stat-tile"><div class="stat-value">{{ counts.days_quiet }}</div><div class="stat-label">days quiet</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Open tasks</h2>
+    {% if open_cards %}
+    <ul class="overview-rows">
+      {% for card in open_cards %}
+      <li>
+        <a class="overview-row" href="/project/{{ project.id }}">
+          <span class="row-title">{{ card.title }}</span>
+          {% if card.subtasks_total %}<span class="muted">{{ card.subtasks_done }}/{{ card.subtasks_total }} subtasks</span>{% endif %}
+          {% if card.due_date %}<span class="chip due">due {{ card.due_date }}</span>{% endif %}
+          {% if card.assignee %}<span class="chip assignee-chip" title="Assigned to {{ card.assignee }}">{{ card.assignee[:2] | upper }}</span>{% endif %}
+          <span class="chip">{{ card.column_name }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="muted">Nothing open. Suspiciously tidy.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Completed tasks</h2>
+    {% if done_cards %}
+    <details class="overview-done">
+      <summary>{{ counts.done }} finished task{{ "" if counts.done == 1 else "s" }}{% if counts.done > done_cards | length %} (showing the latest {{ done_cards | length }}){% endif %}</summary>
+      <ul class="overview-rows">
+        {% for card in done_cards %}
+        <li>
+          <a class="overview-row done-row" href="/project/{{ project.id }}">
+            <span class="row-title">{{ card.title }}</span>
+            <span class="chip">{{ card.column_name }}</span>
+            <span class="muted">{{ card.updated_at[:10] }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% else %}
+    <p class="muted">Nothing finished yet. The squirrel believes in you.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Files</h2>
+    {% if files %}
+    <div class="overview-files">
+      {% for f in files %}
+      <button type="button" class="overview-file" data-attachment-id="{{ f.id }}" title="Preview {{ f.filename }}">
+        <span class="file-name">{{ f.filename }}</span>
+        <span class="muted">{{ f.size | filesizeformat }} &middot; from {{ f.card_title }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% if counts.files > files | length %}<p class="muted">Showing the newest {{ files | length }} of {{ counts.files }} files.</p>{% endif %}
+    {% else %}
+    <p class="muted">No files yet. Drop them onto a card on the board.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Recent activity</h2>
+    {% if activity %}
+    <div class="overview-feed">
+      {% for ev in activity %}
+      <div class="activity-row{% if ev.kind == "comment" %} is-comment{% endif %}">
+        <span class="muted">
+          {%- if ev.kind == "comment" -%}
+            {{ ev.actor }} &middot; {{ ev.card_title }} &middot; {{ ev.created_at[:16] }}
+          {%- elif ev.kind == "attached" -%}
+            {{ ev.actor }} attached {{ ev.text }} to {{ ev.card_title }} &middot; {{ ev.created_at[:16] }}
+          {%- elif ev.kind == "respawned" -%}
+            {{ ev.actor }} sent {{ ev.card_title }} back around &middot; {{ ev.created_at[:16] }}
+          {%- elif ev.kind == "moved" -%}
+            {{ ev.actor }} moved {{ ev.card_title }}{% if ev.text %} {{ ev.text }}{% endif %} &middot; {{ ev.created_at[:16] }}
+          {%- elif ev.kind == "assigned" -%}
+            {{ ev.actor }} assigned {{ ev.card_title }}{% if ev.text %} {{ ev.text }}{% endif %} &middot; {{ ev.created_at[:16] }}
+          {%- else -%}
+            {{ ev.actor }} created {{ ev.card_title }} &middot; {{ ev.created_at[:16] }}
+          {%- endif -%}
+        </span>
+        {% if ev.kind == "comment" %}<div>{{ ev.text }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No activity yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  window.OVERVIEW = {
+    projectId: {{ project.id }},
+    description: {{ project.description | tojson }}
+  };
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/stl-viewer.js"></script>
+<script src="/static/js/preview.js"></script>
+<script src="/static/js/project-overview.js"></script>
+{% endblock %}

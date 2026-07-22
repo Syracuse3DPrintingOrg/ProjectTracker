@@ -17,7 +17,7 @@
     <a class="pill" href="/today">Today</a>
     <a class="pill" href="/calendar">Calendar</a>
     <a class="pill" href="/dashboard/claude-code">Claude Code</a>
-    {% if is_admin or not auth_required %}<a class="pill" href="/displays">Displays</a>{% endif %}
+    {% if is_admin or not auth_required %}<a class="pill" href="/settings#hardware">Displays</a>{% endif %}
   </div>
   <div class="nav-links">
     {% block nav %}{% endblock %}
@@ -46,7 +46,7 @@
     }
     var path = window.location.pathname;
     document.querySelectorAll(".nav-pills .pill").forEach(function (a) {
-      var target = a.getAttribute("href");
+      var target = a.getAttribute("href").split("#")[0];
       var active = target === "/"
         ? (path === "/" || path.startsWith("/project/"))
         : path.startsWith(target);

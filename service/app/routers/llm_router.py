@@ -21,18 +21,22 @@ def subtasks(body: AssistIn):
     card = store.get_card(body.card_id)
     if not card:
         raise HTTPException(404)
+    if card["parent_id"] is not None:
+        raise HTTPException(422, "subtasks only nest one level deep")
     if not llm.is_configured():
         raise HTTPException(400, "no LLM provider configured")
     try:
         items = llm.suggest_subtasks(card["title"], card["description"])
     except llm.LLMError as exc:
         raise HTTPException(502, str(exc))
-    # These become real subtasks now, not description text.
+    # These become real child cards now, not description text.
     existing = {s["title"].lower() for s in store.list_subtasks(body.card_id)}
     created = []
     for item in items:
         if item.lower() not in existing:
-            created.append(store.create_subtask(body.card_id, item))
+            sub = store.create_subtask(body.card_id, item)
+            if sub:
+                created.append(sub)
     return {
         "subtasks": [s["title"] for s in created],
         "card": store.get_card(body.card_id),

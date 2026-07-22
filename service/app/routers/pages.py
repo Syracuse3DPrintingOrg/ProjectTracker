@@ -59,6 +59,9 @@ def project_board(request: Request, project_id: int):
     attachment_counts = attachments.counts_by_card(project_id)
     subtask_counts = store.subtask_progress(project_id)
     usernames = {u["id"]: u["username"] for u in users.list_users()}
+    # Child cards render nested inside their parent, never as their own
+    # column entries.
+    cards = [c for c in store.list_cards(project_id) if c["parent_id"] is None]
     return templates.TemplateResponse(
         request,
         "board.html",
@@ -68,11 +71,33 @@ def project_board(request: Request, project_id: int):
             "claude_status": claude_status,
             "projects": store.list_projects(),
             "columns": store.list_columns(project_id),
-            "cards": store.list_cards(project_id),
+            "cards": cards,
+            "children": store.children_map(project_id),
             "attachment_counts": attachment_counts,
             "subtask_counts": subtask_counts,
             "usernames": usernames,
             "today_ids": [c["id"] for c in store.list_today()],
+        },
+    )
+
+
+@router.get("/project/{project_id}/overview")
+def project_overview_page(request: Request, project_id: int):
+    project = store.get_project(project_id)
+    if not project:
+        return RedirectResponse("/", status_code=303)
+    settings = config.load_settings()
+    data = store.project_overview(project_id)
+    return templates.TemplateResponse(
+        request,
+        "project_overview.html",
+        {
+            **_page_context(settings, request),
+            "project": project,
+            "description_paragraphs": [
+                p.strip() for p in project["description"].splitlines() if p.strip()
+            ],
+            **data,
         },
     )
 

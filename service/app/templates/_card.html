@@ -1,4 +1,5 @@
 {% set done, total = checklist_progress(card.description) %}
+{% set kids = children.get(card.id, []) if children is defined else [] %}
 <div class="card" data-card-id="{{ card.id }}"
      data-title="{{ card.title }}" data-priority="{{ card.priority }}"
      data-due="{{ card.due_date }}" data-labels="{{ card.labels }}"
@@ -10,4 +11,17 @@
      data-assignee="{{ usernames.get(card.assignee_id, '') if usernames is defined else '' }}">
   <div class="card-title">{{ card.title }}</div>
   <div class="meta"></div>
+  {% if kids %}
+  <button type="button" class="sub-badge" title="Show or hide the subtasks">
+    <span class="sub-arrow">&#9656;</span>
+    <span class="sub-count">{{ sub[0] if sub else 0 }}/{{ sub[1] if sub else kids | length }} subtasks</span>
+  </button>
+  <div class="child-list" data-parent-id="{{ card.id }}" hidden>
+    {% for kid in kids %}
+    <div class="child-card{% if kid.done %} done{% endif %}" data-card-id="{{ kid.id }}" data-title="{{ kid.title }}">
+      <span class="child-title">{{ kid.title }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>

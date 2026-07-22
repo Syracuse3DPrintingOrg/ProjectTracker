@@ -1,4 +1,4 @@
-/* Displays page: registry CRUD and Android TV actions. */
+/* Wall display registry (the Hardware pane on Settings): CRUD and Android TV actions. */
 (function () {
   "use strict";
 

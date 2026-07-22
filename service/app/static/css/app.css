@@ -197,6 +197,49 @@ label { display: block; margin: 0.6rem 0 0.2rem; color: var(--muted); font-size:
 .subtask-title.done { text-decoration: line-through; opacity: 0.55; }
 .subtask-add { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
 .subtask-add input { flex: 1; }
+.subtask-open {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0 0.3rem;
+  line-height: 1;
+}
+.subtask-open:hover { color: var(--accent-2); box-shadow: none; }
+
+/* nested subtasks on a board card */
+.sub-badge {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 0.3rem 0 0;
+  cursor: pointer;
+}
+.sub-badge:hover { color: var(--text); box-shadow: none; }
+.sub-arrow { display: inline-block; width: 0.8em; }
+.child-list {
+  margin-top: 0.35rem;
+  padding: 0.15rem 0 0.15rem 0.5rem;
+  border-left: 2px solid var(--border);
+  min-height: 26px;
+}
+.child-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.3rem 0.45rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.8rem;
+  cursor: grab;
+}
+.child-card:hover { border-color: var(--accent); }
+.child-card:active { cursor: grabbing; }
+.child-card.done .child-title { text-decoration: line-through; opacity: 0.55; }
+.child-card.sortable-ghost { opacity: 0.4; }
 .chip.assignee-chip {
   background: linear-gradient(100deg, var(--accent), #5b8cff);
   color: #fff;
@@ -569,3 +612,161 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 /* media previews */
 .preview-media { max-width: 100%; max-height: 100%; margin: auto; display: block; }
 .preview-media-audio { width: 90%; margin: 3rem auto 0.5rem; display: block; }
+
+/* settings: sticky section nav on the left, one pane at a time on the right */
+.settings-layout { display: flex; gap: 1rem; align-items: flex-start; width: 100%; }
+.settings-nav {
+  position: sticky;
+  top: 4.2rem;
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.42rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  white-space: nowrap;
+}
+.settings-nav a:hover { color: var(--text); border-color: var(--accent); }
+.settings-nav a.active {
+  background: linear-gradient(100deg, var(--accent), #5b8cff);
+  color: #fff;
+  box-shadow: var(--glow);
+}
+.settings-nav .nav-ico { width: 1.25rem; text-align: center; flex-shrink: 0; }
+.settings-content { flex: 1; min-width: 0; }
+.settings-content .panel { max-width: none; }
+.settings-content h2 { font-size: 1rem; margin: 1.6rem 0 0.4rem; }
+.settings-content h1 + h2, .settings-content .stat-tiles + h2 { margin-top: 1rem; }
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.7rem;
+  margin: 0.9rem 0;
+}
+.stat-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.7rem 0.85rem;
+}
+.stat-tile .stat-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.stat-tile .stat-label { color: var(--muted); font-size: 0.8rem; }
+
+.health-list { list-style: none; padding: 0; margin: 0.4rem 0 0; }
+.health-list li {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+  padding: 0.4rem 0.1rem;
+  border-bottom: 1px solid var(--border);
+}
+.health-status.ok { color: var(--ok); }
+.health-status.warn { color: var(--warn); }
+
+.quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+}
+.quick-link {
+  display: block;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.65rem 0.8rem;
+  color: var(--text);
+}
+.quick-link:hover { border-color: var(--accent); box-shadow: var(--glow); }
+.quick-link .muted { display: block; font-size: 0.8rem; margin-top: 0.15rem; }
+
+/* project overview */
+.overview { display: flex; flex-direction: column; gap: 0.9rem; }
+.overview .panel { max-width: none; }
+.overview .panel h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+.overview-head h1 { font-size: 1.25rem; margin: 0; }
+.overview-desc p { margin: 0.35rem 0; }
+.overview-desc p:first-child { margin-top: 0; }
+.overview-edit { margin-top: 0.6rem; color: var(--muted); font-size: 0.85rem; }
+.overview-rows { list-style: none; padding: 0; margin: 0; }
+.overview-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.45rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.overview-row .row-title { flex: 1; min-width: 0; }
+.overview-row:hover .row-title { color: var(--accent-2); }
+.overview-row.done-row .row-title { text-decoration: line-through; opacity: 0.55; }
+.overview-done summary { cursor: pointer; color: var(--muted); }
+.overview-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.6rem;
+}
+.overview-file {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.overview-file .file-name,
+.overview-file .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-file .muted { font-size: 0.78rem; }
+.overview-feed { max-height: 340px; overflow-y: auto; }
+
+.code-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.8rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 800px) {
+  .settings-layout { flex-direction: column; }
+  .settings-nav {
+    position: static;
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0.35rem;
+  }
+  .settings-nav a {
+    border-color: var(--border);
+    border-radius: 999px;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.84rem;
+    flex-shrink: 0;
+  }
+}

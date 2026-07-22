@@ -52,11 +52,6 @@
     }
     const att = parseInt(el.dataset.attachments || "0", 10);
     if (att) html += `<span class="chip" title="${att} file${att > 1 ? "s" : ""} attached">&#128206; ${att}</span>`;
-    const subTotal = parseInt(el.dataset.subTotal || "0", 10);
-    if (subTotal) {
-      const subDone = parseInt(el.dataset.subDone || "0", 10);
-      html += `<span class="chip ${subDone === subTotal ? "check-full" : ""}" title="Subtasks">&#9656; ${subDone}/${subTotal}</span>`;
-    }
     if (el.dataset.assignee) {
       const initials = el.dataset.assignee.slice(0, 2).toUpperCase();
       html += `<span class="chip assignee-chip" title="Assigned to ${esc(el.dataset.assignee)}">${esc(initials)}</span>`;
@@ -149,6 +144,134 @@
     markToday();
   }
 
+  /* ---- nested subtasks on the board ---- */
+
+  const SUB_OPEN_KEY = "sq-open-subtasks";
+
+  function openSubtaskSet() {
+    try { return new Set(JSON.parse(sessionStorage.getItem(SUB_OPEN_KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  }
+
+  function setExpanded(cardBox, open) {
+    const list = cardBox.querySelector(".child-list");
+    if (!list) return;
+    list.hidden = !open;
+    const arrow = cardBox.querySelector(".sub-arrow");
+    if (arrow) arrow.innerHTML = open ? "&#9662;" : "&#9656;";
+    const set = openSubtaskSet();
+    if (open) set.add(cardBox.dataset.cardId); else set.delete(cardBox.dataset.cardId);
+    sessionStorage.setItem(SUB_OPEN_KEY, JSON.stringify([...set]));
+  }
+
+  function hasKids(el) {
+    return !!el.querySelector(".child-card") || parseInt(el.dataset.subTotal || "0", 10) > 0;
+  }
+
+  function childEl(sub) {
+    const div = document.createElement("div");
+    div.className = "child-card" + (sub.done ? " done" : "");
+    div.dataset.cardId = sub.id;
+    div.dataset.title = sub.title;
+    const span = document.createElement("span");
+    span.className = "child-title";
+    span.textContent = sub.title;
+    div.appendChild(span);
+    return div;
+  }
+
+  function ensureChildUI(cardBox) {
+    let list = cardBox.querySelector(".child-list");
+    if (!list) {
+      const badge = document.createElement("button");
+      badge.type = "button";
+      badge.className = "sub-badge";
+      badge.title = "Show or hide the subtasks";
+      badge.innerHTML = '<span class="sub-arrow">&#9656;</span> <span class="sub-count"></span>';
+      cardBox.appendChild(badge);
+      list = document.createElement("div");
+      list.className = "child-list";
+      list.dataset.parentId = cardBox.dataset.cardId;
+      list.hidden = true;
+      cardBox.appendChild(list);
+      initChildSortable(list);
+    }
+    return list;
+  }
+
+  /* Where a drop landed when it wasn't a list: a card body under the
+     pointer means "nest under that card". */
+  function nestTargetAt(evt) {
+    const oe = evt.originalEvent;
+    if (!oe || typeof oe.clientX !== "number") return null;
+    const under = document.elementFromPoint(oe.clientX, oe.clientY);
+    if (!under) return null;
+    const cardBox = under.closest(".card");
+    if (!cardBox || cardBox === evt.item || cardBox.contains(evt.item)) return null;
+    return parseInt(cardBox.dataset.cardId, 10);
+  }
+
+  async function nestCard(cardId, parentId) {
+    try {
+      await api(`/api/cards/${cardId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ parent_id: parentId }),
+      });
+    } catch (err) {
+      alert("Nest failed: " + err.message);
+    }
+    window.location.reload();
+  }
+
+  function initChildSortable(el) {
+    new Sortable(el, {
+      group: "cards",
+      animation: 120,
+      ghostClass: "sortable-ghost",
+      fallbackOnBody: true,
+      swapThreshold: 0.65,
+      onEnd: async (evt) => {
+        const cardId = evt.item.dataset.cardId;
+        try {
+          if (evt.to === evt.from) {
+            if (evt.newIndex !== evt.oldIndex) {
+              await api(`/api/subtasks/${cardId}`, {
+                method: "PATCH",
+                body: JSON.stringify({ position: evt.newIndex }),
+              });
+            }
+            return;
+          }
+          if (evt.to.classList.contains("child-list")) {
+            // Moved into another card's nested list.
+            await api(`/api/cards/${cardId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ parent_id: parseInt(evt.to.dataset.parentId, 10) }),
+            });
+          } else if (evt.to.dataset.today) {
+            await api(`/api/cards/${cardId}/today`, {
+              method: "POST",
+              body: JSON.stringify({ today: true, list: todayList }),
+            });
+          } else {
+            // Dragged out into a column: back to a top-level card.
+            await api(`/api/cards/${cardId}`, {
+              method: "PATCH",
+              body: JSON.stringify({ clear_parent: true }),
+            });
+            await api(`/api/cards/${cardId}/move`, {
+              method: "POST",
+              body: JSON.stringify({ column_id: parseInt(evt.to.dataset.columnId, 10), position: evt.newIndex }),
+            });
+          }
+        } catch (err) {
+          alert("Move failed: " + err.message);
+        }
+        window.location.reload();
+      },
+    });
+  }
+
   /* ---- drag and drop ---- */
 
   function initColumnSortable(el) {
@@ -160,6 +283,16 @@
         const cardId = evt.item.dataset.cardId;
         const to = evt.to;
         try {
+          if (to.classList.contains("child-list")) {
+            // Dropped into an expanded nested list: nest under that card.
+            if (hasKids(evt.item)) {
+              alert("A card with subtasks of its own cannot become a subtask.");
+              window.location.reload();
+              return;
+            }
+            await nestCard(cardId, parseInt(to.dataset.parentId, 10));
+            return;
+          }
           if (to.dataset.today) {
             await api(`/api/cards/${cardId}/today`, {
               method: "POST",
@@ -178,6 +311,12 @@
             evt.item.remove();
             await refreshToday();
           } else {
+            // Dropped onto a collapsed card's body? That nests instead.
+            const nestTarget = hasKids(evt.item) ? null : nestTargetAt(evt);
+            if (nestTarget && nestTarget !== parseInt(cardId, 10)) {
+              await nestCard(cardId, nestTarget);
+              return;
+            }
             const moved = await api(`/api/cards/${cardId}/move`, {
               method: "POST",
               body: JSON.stringify({ column_id: parseInt(to.dataset.columnId, 10), position: evt.newIndex }),
@@ -283,14 +422,17 @@
     document.getElementById("attachments-box").hidden = !card;
     document.getElementById("attachment-list").textContent = "";
     document.getElementById("attachment-note").textContent = "";
-    document.getElementById("subtasks-box").hidden = !card;
+    // A subtask card cannot take subtasks of its own (one level only).
+    const isChild = !!(card && card.parent_id);
+    document.getElementById("subtasks-box").hidden = !card || isChild;
     document.getElementById("subtask-list").textContent = "";
     document.getElementById("subtask-progress").textContent = "";
+    document.getElementById("assist-subtasks").disabled = isChild;
     document.getElementById("activity-box").hidden = !card;
     document.getElementById("activity-feed").textContent = "";
     if (card) {
       refreshAttachments(card.id).catch(() => { /* list stays empty */ });
-      refreshSubtasks(card.id);
+      if (!isChild) refreshSubtasks(card.id);
       refreshActivity(card.id);
       loadAssignees().then(users => {
         const row = document.getElementById("assignee-row");
@@ -320,6 +462,21 @@
   });
 
   document.getElementById("board").addEventListener("click", async (e) => {
+    const badge = e.target.closest(".sub-badge");
+    if (badge) {
+      const box = badge.closest(".card");
+      const list = box.querySelector(".child-list");
+      setExpanded(box, list ? list.hidden : false);
+      return;
+    }
+    const mini = e.target.closest(".child-card");
+    if (mini) {
+      try {
+        const child = await api(`/api/cards/${mini.dataset.cardId}`);
+        openCardDialog(child, child.column_id);
+      } catch (err) { alert(err.message); }
+      return;
+    }
     const el = e.target.closest(".card");
     if (!el || e.target.closest(".col-menu")) return;
     try {
@@ -368,6 +525,11 @@
           syncCardChecklist(card);
           renderMeta(el);
         }
+        const mini = document.querySelector(`#board .child-card[data-card-id="${card.id}"]`);
+        if (mini) {
+          mini.dataset.title = card.title;
+          mini.querySelector(".child-title").textContent = card.title;
+        }
         await refreshToday();
       } else {
         const card = await api("/api/cards", {
@@ -385,10 +547,16 @@
 
   document.getElementById("card-delete").addEventListener("click", async () => {
     const id = form.card_id.value;
-    if (!id || !confirm("Delete this card?")) return;
+    if (!id || !confirm("Delete this card? Its subtasks become cards of their own.")) return;
     try {
       await api(`/api/cards/${id}`, { method: "DELETE" });
-      document.querySelectorAll(`.card[data-card-id="${id}"]`).forEach(el => el.remove());
+      const boardCard = document.querySelector(`#board .card[data-card-id="${id}"]`);
+      if (boardCard && hasKids(boardCard)) {
+        // The subtasks were promoted to top-level cards; redraw the board.
+        window.location.reload();
+        return;
+      }
+      document.querySelectorAll(`.card[data-card-id="${id}"], .child-card[data-card-id="${id}"]`).forEach(el => el.remove());
       dialog.close();
       updateCounts();
     } catch (err) { alert(err.message); }
@@ -606,13 +774,31 @@
   }
 
   function syncCardSubtasks(cardId, items) {
+    const doneCount = items.filter(s => s.done).length;
     document.querySelectorAll(`.card[data-card-id="${cardId}"]`).forEach(el => {
       el.dataset.subTotal = items.length;
-      el.dataset.subDone = items.filter(s => s.done).length;
+      el.dataset.subDone = doneCount;
       renderMeta(el);
     });
+    const boardCard = document.querySelector(`#board .card[data-card-id="${cardId}"]`);
+    if (boardCard) {
+      if (items.length) {
+        const list = ensureChildUI(boardCard);
+        list.textContent = "";
+        items.forEach(s => list.appendChild(childEl(s)));
+        boardCard.querySelector(".sub-count").textContent = `${doneCount}/${items.length} subtasks`;
+        boardCard.querySelector(".sub-badge").hidden = false;
+      } else {
+        const badge = boardCard.querySelector(".sub-badge");
+        if (badge) {
+          badge.hidden = true;
+          const list = boardCard.querySelector(".child-list");
+          if (list) list.hidden = true;
+        }
+      }
+    }
     document.getElementById("subtask-progress").textContent =
-      items.length ? `${items.filter(s => s.done).length}/${items.length}` : "";
+      items.length ? `${doneCount}/${items.length}` : "";
   }
 
   async function refreshSubtasks(cardId) {
@@ -644,6 +830,18 @@
           await refreshSubtasks(cardId);
         } catch (err) { alert(err.message); }
       });
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "subtask-open";
+      open.textContent = "↗";
+      open.title = "Open this subtask's own card";
+      open.addEventListener("click", async () => {
+        try {
+          const child = await api(`/api/cards/${s.id}`);
+          dialog.close();
+          openCardDialog(child, child.column_id);
+        } catch (err) { alert(err.message); }
+      });
       const del = document.createElement("button");
       del.type = "button";
       del.className = "attachment-delete";
@@ -655,7 +853,7 @@
           await refreshSubtasks(cardId);
         } catch (err) { alert(err.message); }
       });
-      row.append(box, title, del);
+      row.append(box, title, open, del);
       list.appendChild(row);
     });
     syncCardSubtasks(cardId, items);
@@ -1068,6 +1266,11 @@
   /* ---- init ---- */
 
   document.querySelectorAll("#board .card").forEach(renderMeta);
+  document.querySelectorAll("#board .child-list").forEach(initChildSortable);
+  const openSubs = openSubtaskSet();
+  document.querySelectorAll("#board .card").forEach(el => {
+    if (openSubs.has(el.dataset.cardId)) setExpanded(el, true);
+  });
   updateCounts();
   refreshToday();
   squirrelNudge();

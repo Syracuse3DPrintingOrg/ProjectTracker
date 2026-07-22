@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-22
+
+### Added
+
+- **Subtasks nest on the board.** A card with subtasks shows a count
+  badge; click it and they unfold right under the parent, collapsed by
+  default. Drag any card onto another card to make it a subtask, drag a
+  subtask out into a column to make it a full task again. Subtasks are
+  real cards now, with their own attachments, comments, and due dates,
+  and old boards migrate automatically.
+- **Project overview pages.** Every project gets a full page (the
+  Overview button on its board): description, open tasks with their
+  status and owners, completed work, every file attached anywhere in the
+  project (click to preview), and recent activity.
+- **Settings got a proper home.** A left sidebar with panes: a landing
+  overview with stats and health checks, AI Assist, General, Users and
+  Access, Hardware (wall displays, display token, and the Claude Code
+  connector all in one place), Backup and Restore, and Updates, which
+  tells you when a newer SQ is out and how to pull it. Works full width
+  and collapses neatly on a phone.
+
+### Fixed
+
+- **SolidWorks previews actually show up.** SQ now digs the preview
+  image out the same way Windows Explorer does (including the summary
+  thumbnail and images buried in metafiles), so files that showed "no
+  embedded preview" before now display. Full geometry still needs a
+  commercially licensed CAD kernel (that is how the big quoting sites
+  import SolidWorks), so STEP or STL exports remain the path to true 3D.
+- **More formats preview.** Visio files show their embedded thumbnail,
+  Illustrator files saved with PDF compatibility open as PDFs, and
+  DipTrace files explain exactly what to export instead of failing
+  silently.
+
 ## [0.13.0] - 2026-07-22
 
 ### Added

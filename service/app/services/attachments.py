@@ -32,14 +32,29 @@ VIDEO_EXTS = {"mp4", "webm", "mov", "m4v"}
 AUDIO_EXTS = {"mp3", "wav", "ogg", "flac", "m4a"}
 CONVERTIBLE_MESH_EXTS = {"3mf", "obj"}
 SOLIDWORKS_EXTS = {"sldprt", "sldasm", "slddrw", "eprt", "easm"}
+VISIO_EXTS = {"vsd", "vsdx"}
+EMBEDDED_PREVIEW_EXTS = SOLIDWORKS_EXTS | VISIO_EXTS
 SOLIDWORKS_NOTE = (
     "SolidWorks files are proprietary, so this is the preview image saved"
-    " inside the file, not live geometry. Export STEP or STL for a full 3D"
-    " preview."
+    " inside the file (the same one Windows Explorer shows), not live"
+    " geometry. Export STEP or STL for a full 3D preview."
 )
 SOLIDWORKS_NO_PREVIEW_NOTE = (
-    "This SolidWorks file carries no embedded preview image. Export STEP"
-    " for exchange or STL for an in-browser 3D preview."
+    "This SolidWorks file carries no embedded preview image (the Save"
+    " preview picture option was off when it was saved). Export STEP for"
+    " exchange or STL for an in-browser 3D preview."
+)
+VISIO_NOTE = (
+    "Visio diagrams are proprietary, so this is the preview image saved"
+    " inside the file. Export PDF from Visio for the full drawing."
+)
+VISIO_NO_PREVIEW_NOTE = (
+    "This Visio file carries no embedded preview image. Export PDF from"
+    " Visio for a full preview."
+)
+DIPTRACE_NOTE = (
+    "DipTrace files have no preview SQ can read. Export a PDF or Gerber"
+    " set from DipTrace and attach it alongside."
 )
 
 
@@ -188,19 +203,49 @@ def preview(att: dict) -> dict:
         return {**base, "kind": "step", "url": url, "format": "iges"}
     if ext == "zip":
         return {**base, **_preview_zip(path_for(att))}
-    if ext in SOLIDWORKS_EXTS:
+    if ext == "ai":
+        # Illustrator files saved with PDF compatibility are PDFs.
+        head = _head(path_for(att))
+        if b"%PDF" in head:
+            return {
+                **base,
+                "kind": "pdf",
+                "url": f"/api/attachments/{att['id']}/file-as-pdf",
+            }
+        return {
+            **base,
+            "kind": "binary",
+            "note": "This Illustrator file was saved without PDF compatibility;"
+            " re-save it with that option on and it previews here.",
+        }
+    if ext == "dip":
+        return {**base, "kind": "model-unsupported", "note": DIPTRACE_NOTE}
+    if ext in EMBEDDED_PREVIEW_EXTS:
         from . import mesh_convert
 
-        found = mesh_convert.extract_solidworks_preview(path_for(att))
+        solidworks = ext in SOLIDWORKS_EXTS
+        found = mesh_convert.extract_embedded_preview(path_for(att))
         if found:
             return {
                 **base,
                 "kind": "image",
                 "url": f"/api/attachments/{att['id']}/embedded-preview",
-                "note": SOLIDWORKS_NOTE,
+                "note": SOLIDWORKS_NOTE if solidworks else VISIO_NOTE,
             }
-        return {**base, "kind": "model-unsupported", "note": SOLIDWORKS_NO_PREVIEW_NOTE}
+        return {
+            **base,
+            "kind": "model-unsupported",
+            "note": SOLIDWORKS_NO_PREVIEW_NOTE if solidworks else VISIO_NO_PREVIEW_NOTE,
+        }
     return {**base, "kind": "binary", "note": "no preview for this type; download to open it"}
+
+
+def _head(path: Path, size: int = 4096) -> bytes:
+    try:
+        with open(path, "rb") as f:
+            return f.read(size)
+    except OSError:
+        return b""
 
 
 def _preview_zip(path: Path) -> dict:

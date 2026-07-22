@@ -19,9 +19,17 @@ ADMIN_WRITE_PREFIXES = (
 )
 
 # Reads that are still admin-only: a full backup is the whole database,
-# the user and key lists are the admin's business, and the display list
-# carries the display token in every URL.
-ADMIN_READ_PATHS = ("/api/export", "/api/users", "/api/keys", "/api/displays", "/displays")
+# the user and key lists are the admin's business, the display list
+# carries the display token in every URL, and the settings reads
+# (overview, update check) belong to the Settings page.
+ADMIN_READ_PATHS = (
+    "/api/export",
+    "/api/users",
+    "/api/keys",
+    "/api/displays",
+    "/displays",
+    "/api/settings",
+)
 
 # Writes any signed-in user may make (self-service).
 SELF_SERVICE_PREFIXES = ("/api/account",)

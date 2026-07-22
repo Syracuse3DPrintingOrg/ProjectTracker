@@ -153,35 +153,141 @@ def obj_to_stl(path: Path) -> bytes:
     return _stl_bytes(triangles)
 
 
-def extract_solidworks_preview(path: Path) -> tuple[bytes, str] | None:
-    """The preview image SolidWorks embeds in its OLE container, as
-    (bytes, mime). None when there is nothing usable to show."""
+STREAM_SCAN_CAP = 30 * 1024 * 1024
+
+
+def _dib_to_bmp(dib: bytes) -> bytes | None:
+    """Wrap a raw DIB (BITMAPINFOHEADER + palette + pixels) into a BMP
+    file browsers can render. None when the header does not add up."""
+    if len(dib) < 40:
+        return None
+    bi_size, width, height = struct.unpack_from("<Iii", dib, 0)
+    planes, bitcount = struct.unpack_from("<HH", dib, 12)
+    compression, size_image = struct.unpack_from("<II", dib, 16)
+    clr_used = struct.unpack_from("<I", dib, 32)[0]
+    if not (
+        bi_size >= 40
+        and 0 < width <= 20000
+        and 0 < abs(height) <= 20000
+        and planes == 1
+        and bitcount in (1, 4, 8, 16, 24, 32)
+        and compression in (0, 3)
+    ):
+        return None
+    palette = clr_used or (1 << bitcount if bitcount <= 8 else 0)
+    offset = 14 + bi_size + palette * 4 + (12 if compression == 3 else 0)
+    stride = ((width * bitcount + 31) // 32) * 4
+    expected = offset - 14 + max(size_image, stride * abs(height))
+    if len(dib) < expected:
+        return None
+    body = dib[:expected]
+    header = b"BM" + struct.pack("<IHHI", 14 + len(body), 0, 0, offset)
+    return header + body
+
+
+def _image_from_bytes(data: bytes) -> tuple[bytes, str] | None:
+    """Best renderable image inside a byte blob: PNG or JPEG anywhere,
+    BMP at the front, or a DIB buried in a metafile."""
+    pos = data.find(b"\x89PNG\r\n\x1a\n")
+    if pos != -1:
+        return data[pos:], "image/png"
+    pos = data.find(b"\xff\xd8\xff")
+    if pos != -1 and len(data) - pos > 100:
+        return data[pos:], "image/jpeg"
+    if data.startswith(b"BM"):
+        return data, "image/bmp"
+    # WMF/EMF thumbnails usually carry the raster as an embedded DIB.
+    start = 0
+    while True:
+        pos = data.find(b"\x28\x00\x00\x00", start)
+        if pos == -1:
+            return None
+        bmp = _dib_to_bmp(data[pos:])
+        if bmp:
+            return bmp, "image/bmp"
+        start = pos + 4
+
+
+def scan_streams_for_preview(streams) -> tuple[bytes, str] | None:
+    """streams: iterable of (name, bytes). Name-hinted streams win, then
+    anything with a recognizable image, largest first. Pure, testable."""
+    hinted: list[tuple[bytes, str]] = []
+    other: list[tuple[bytes, str]] = []
+    for name, data in streams:
+        if not data or len(data) > STREAM_SCAN_CAP:
+            continue
+        found = _image_from_bytes(data)
+        if not found:
+            continue
+        lname = name.lower()
+        target = hinted if ("preview" in lname or "thumbnail" in lname) else other
+        target.append(found)
+    for bucket in (hinted, other):
+        if bucket:
+            return max(bucket, key=lambda f: len(f[0]))
+    return None
+
+
+def _ole_thumbnail_property(ole) -> bytes | None:
+    """The SummaryInformation thumbnail (property 17), the same image
+    Windows Explorer renders for OLE documents."""
+    try:
+        props = ole.getproperties("\x05SummaryInformation")
+    except Exception:
+        return None
+    blob = props.get(17)
+    if isinstance(blob, bytes) and len(blob) > 8:
+        # CLIPDATA: cbSize, cfFormat, then the payload (a METAFILEPICT
+        # header precedes WMF bytes for CF_METAFILEPICT; DIB is raw).
+        return blob
+    return None
+
+
+def extract_embedded_preview(path: Path) -> tuple[bytes, str] | None:
+    """The preview image a document carries inside itself, whether the
+    container is OLE (SolidWorks, old Visio, old Office) or a zip
+    package (vsdx and friends). Mirrors what Windows Explorer shows."""
     import olefile
 
     try:
-        if not olefile.isOleFile(str(path)):
-            return None
-        ole = olefile.OleFileIO(str(path))
+        if olefile.isOleFile(str(path)):
+            ole = olefile.OleFileIO(str(path))
+            try:
+                def streams():
+                    thumb = _ole_thumbnail_property(ole)
+                    if thumb:
+                        yield ("summary-thumbnail", thumb)
+                    for entry in ole.listdir(streams=True, storages=False):
+                        name = "/".join(entry)
+                        try:
+                            yield (name, ole.openstream(entry).read())
+                        except OSError:
+                            continue
+
+                return scan_streams_for_preview(streams())
+            finally:
+                ole.close()
     except OSError:
         return None
     try:
-        candidates = sorted(
-            (s for s in ole.listdir(streams=True, storages=False)),
-            key=lambda s: ("png" not in s[-1].lower(), len(s)),
-        )
-        for stream in candidates:
-            name = stream[-1].lower()
-            if "preview" not in name and "thumbnail" not in name:
-                continue
-            data = ole.openstream(stream).read()
-            if data.startswith(b"\x89PNG"):
-                return data, "image/png"
-            if data.startswith(b"BM"):
-                return data, "image/bmp"
-            # Some versions wrap the PNG a little way in; find it.
-            pos = data.find(b"\x89PNG")
-            if pos != -1:
-                return data[pos:], "image/png"
+        with zipfile.ZipFile(path) as z:
+            def zstreams():
+                names = z.namelist()
+                ordered = sorted(
+                    names,
+                    key=lambda n: ("thumbnail" not in n.lower(), n),
+                )
+                for n in ordered[:50]:
+                    info = z.getinfo(n)
+                    if info.file_size > STREAM_SCAN_CAP or info.is_dir():
+                        continue
+                    if "thumbnail" in n.lower() or n.lower().startswith("docprops/"):
+                        yield (n, z.read(n))
+
+            return scan_streams_for_preview(zstreams())
+    except (zipfile.BadZipFile, OSError):
         return None
-    finally:
-        ole.close()
+
+
+# The old name stays callable; SolidWorks was the first user of this.
+extract_solidworks_preview = extract_embedded_preview

@@ -1,6 +1,106 @@
-/* Settings page: each section posts only its own fields. */
+/* Settings page: a sidebar of panes (hash-routed, one visible at a time);
+   each section still posts only its own fields. */
 (function () {
   "use strict";
+
+  // --- Pane routing: /settings#ai deep-links and survives refresh. ---
+  const panes = Array.from(document.querySelectorAll(".settings-pane"));
+  const paneNames = panes.map((p) => p.dataset.pane);
+  const navLinks = Array.from(document.querySelectorAll(".settings-nav a"));
+  const paneLoaded = {};
+
+  function showPane(name) {
+    if (paneNames.indexOf(name) === -1) name = "overview";
+    panes.forEach((p) => { p.hidden = p.dataset.pane !== name; });
+    navLinks.forEach((a) => {
+      a.classList.toggle("active", a.getAttribute("href") === "#" + name);
+    });
+    // Panes that fetch their numbers do it on first show, not page load.
+    if (name === "overview" && !paneLoaded.overview) {
+      paneLoaded.overview = true;
+      loadOverview();
+    }
+    if (name === "updates" && !paneLoaded.updates) {
+      paneLoaded.updates = true;
+      checkUpdates();
+    }
+  }
+
+  window.addEventListener("hashchange", () => {
+    showPane(window.location.hash.slice(1));
+  });
+  showPane(window.location.hash.slice(1) || "overview");
+
+  // --- Overview pane ---
+  function setStat(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(value);
+  }
+
+  function setHealth(id, ok, okText, otherText, warnWhenOff) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = ok ? okText : otherText;
+    el.classList.remove("ok", "warn");
+    if (ok) el.classList.add("ok");
+    else if (warnWhenOff) el.classList.add("warn");
+  }
+
+  async function loadOverview() {
+    const note = document.getElementById("ov-note");
+    try {
+      const resp = await fetch("/api/settings/overview");
+      if (!resp.ok) throw new Error(resp.statusText);
+      const data = await resp.json();
+      setStat("ov-projects", data.projects);
+      setStat("ov-cards", data.open_cards);
+      setStat("ov-users", data.users);
+      setStat("ov-displays", data.displays);
+      const h = data.health || {};
+      setHealth("ov-health-data", h.data_dir_writable, "writable", "not writable: nothing can be saved", true);
+      setHealth("ov-health-ai", h.ai_configured, "configured", "not set up (optional)", false);
+      setHealth("ov-health-users", h.users_configured, "on", "off: open on your network", false);
+    } catch (err) {
+      if (note) note.textContent = "Could not load the overview: " + err.message;
+    }
+  }
+
+  // --- Updates pane ---
+  async function checkUpdates() {
+    const el = document.getElementById("updates-status");
+    el.textContent = "Checking for a newer release...";
+    try {
+      const resp = await fetch("/api/settings/updates");
+      if (!resp.ok) throw new Error(resp.statusText);
+      const data = await resp.json();
+      if (data.error) {
+        el.textContent = data.error;
+        return;
+      }
+      el.textContent = "";
+      if (data.update_available) {
+        const strong = document.createElement("strong");
+        strong.textContent = data.latest + " available.";
+        el.appendChild(strong);
+        el.appendChild(document.createTextNode(
+          " You are on " + data.current + "; pull the new image below to update. "));
+        const link = document.createElement("a");
+        link.href = data.url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = "What changed";
+        el.appendChild(link);
+      } else if (data.latest) {
+        el.textContent = "You are current: " + data.current + " is the newest release.";
+      } else {
+        el.textContent = "You are on " + data.current + "; no releases have been published yet.";
+      }
+    } catch (err) {
+      el.textContent = "Could not check for updates: " + err.message;
+    }
+  }
+
+  document.getElementById("check-updates").addEventListener("click", checkUpdates);
 
   async function save(body, noteId, okText) {
     const note = document.getElementById(noteId);

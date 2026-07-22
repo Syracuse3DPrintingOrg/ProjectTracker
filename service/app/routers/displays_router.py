@@ -1,11 +1,11 @@
 """Wall display management: registry CRUD and Android TV control."""
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from .. import config
-from ..services import auth, displays
-from .pages import _page_context, templates
+from ..services import displays
 
 router = APIRouter(tags=["displays"])
 
@@ -41,23 +41,9 @@ def _with_urls(d: dict, request: Request, settings: dict) -> dict:
 
 
 @router.get("/displays")
-def displays_page(request: Request):
-    settings = config.load_settings()
-    return templates.TemplateResponse(
-        request,
-        "displays.html",
-        {
-            **_page_context(settings, request),
-            "displays": [
-                _with_urls(d, request, settings) for d in displays.list_displays(settings)
-            ],
-            "adb_available": displays.adb_available(),
-            "base_url": _base_url(request, settings),
-            "base_url_configured": bool((settings.get("base_url") or "").strip()),
-            "has_token": bool(settings.get("display_token")),
-            "needs_token": auth.auth_required(settings),
-        },
-    )
+def displays_page():
+    """The registry lives on the Settings page now; old links still land there."""
+    return RedirectResponse("/settings#hardware", status_code=303)
 
 
 @router.get("/api/displays")
