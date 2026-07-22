@@ -223,6 +223,11 @@ def preview(att: dict) -> dict:
     if ext in EMBEDDED_PREVIEW_EXTS:
         from . import mesh_convert
 
+        head = _head(path_for(att))
+        # Vendor sites hand out STEP files wearing SolidWorks extensions
+        # (McMaster and friends); those get the real 3D viewer.
+        if head.lstrip()[:10].upper().startswith(b"ISO-10303"):
+            return {**base, "kind": "step", "url": url, "format": "step"}
         solidworks = ext in SOLIDWORKS_EXTS
         found = mesh_convert.extract_embedded_preview(path_for(att))
         if found:
@@ -231,6 +236,14 @@ def preview(att: dict) -> dict:
                 "kind": "image",
                 "url": f"/api/attachments/{att['id']}/embedded-preview",
                 "note": SOLIDWORKS_NOTE if solidworks else VISIO_NOTE,
+            }
+        if solidworks and not head.startswith(b"\xd0\xcf\x11\xe0"):
+            return {
+                **base,
+                "kind": "model-unsupported",
+                "note": "This file uses the newer SolidWorks format, which keeps"
+                " its preview in a sealed container SQ cannot read yet."
+                " Export STEP for exchange or STL for an in-browser 3D preview.",
             }
         return {
             **base,

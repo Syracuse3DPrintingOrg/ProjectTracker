@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-07-22
+
+### Fixed
+
+- **SolidWorks previews, round two.** Verified against real files from
+  public CAD projects: classic SolidWorks files now yield their full
+  preview image (proven on an actual part render). Files that are
+  really STEP wearing a SolidWorks name (vendor downloads do this
+  constantly) are detected by content and open in the full 3D viewer.
+  Files in the newest sealed SolidWorks container say so plainly
+  instead of pretending a preview might exist.
+
 ## [0.14.0] - 2026-07-22
 
 ### Added

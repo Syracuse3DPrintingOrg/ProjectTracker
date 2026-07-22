@@ -124,7 +124,7 @@ def test_solidworks_with_embedded_preview(client, monkeypatch):
     # No preview extractable: honest note.
     pv = client.get(f"/api/attachments/{att['id']}/preview").json()
     assert pv["kind"] == "model-unsupported"
-    assert "no embedded preview" in pv["note"].lower()
+    assert "solidworks" in pv["note"].lower()  # non-OLE bytes read as the newer sealed format
     assert client.get(
         f"/api/attachments/{att['id']}/embedded-preview"
     ).status_code == 404
@@ -233,3 +233,41 @@ def test_diptrace_note(client):
     pv = client.get(f"/api/attachments/{att['id']}/preview").json()
     assert pv["kind"] == "model-unsupported"
     assert "Gerber" in pv["note"]
+
+
+def test_solidworks_extension_step_content_sniffed(client):
+    """McMaster and friends ship STEP files named .sldprt/.sldasm; those
+    should get the real 3D viewer, not the thumbnail path."""
+    card = make_card(client)
+    step = b"ISO-10303-21;\nHEADER;\nENDSEC;\n"
+    att = upload(client, card["id"], "washer.SLDPRT", step)
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "step"
+    assert pv["format"] == "step"
+
+
+def test_modern_solidworks_container_note(client):
+    card = make_card(client)
+    modern = b"\x7f\x33\x5e\x3c\x00\x00\x00\x04" + b"\x00" * 200
+    att = upload(client, card["id"], "new-part.sldprt", modern)
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "model-unsupported"
+    assert "newer SolidWorks format" in pv["note"]
+
+
+def test_real_ole_solidworks_extraction(client):
+    """A genuine OLE SolidWorks part from a public repo, when available:
+    proves the extraction chain on real data."""
+    import pathlib
+    sample = pathlib.Path("/home/dmarafino/.claude/jobs/5e2a5166/tmp/real-ole.sldprt")
+    if not sample.is_file():
+        import pytest
+        pytest.skip("sample not on this machine")
+    card = make_card(client)
+    att = upload(client, card["id"], "arm.sldprt", sample.read_bytes())
+    pv = client.get(f"/api/attachments/{att['id']}/preview").json()
+    assert pv["kind"] == "image"
+    got = client.get(f"/api/attachments/{att['id']}/embedded-preview")
+    assert got.status_code == 200
+    assert got.content.startswith(b"\x89PNG")
+    assert len(got.content) > 10000
