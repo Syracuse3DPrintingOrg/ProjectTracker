@@ -177,9 +177,10 @@
     if (!status.isConnected) return;
     let soup;
     try {
-      soup = stepToTriangles(occt.ReadStepFile(new Uint8Array(buf), null));
+      const reader = data.format === "iges" ? occt.ReadIgesFile : occt.ReadStepFile;
+      soup = stepToTriangles(reader(new Uint8Array(buf), null));
     } catch (err) {
-      throw new Error("STEP conversion failed; download the file to open it.");
+      throw new Error("CAD conversion failed; download the file to open it.");
     }
     if (!status.isConnected) return;
     bodyEl.textContent = "";
@@ -240,6 +241,22 @@
           img.src = data.url;
           img.alt = data.name || "";
           bodyEl.appendChild(img);
+          if (data.note) bodyEl.appendChild(el("div", "preview-note", data.note));
+          break;
+        }
+        case "video": {
+          const video = el("video", "preview-media");
+          video.src = data.url;
+          video.controls = true;
+          bodyEl.appendChild(video);
+          break;
+        }
+        case "audio": {
+          const audio = el("audio", "preview-media-audio");
+          audio.src = data.url;
+          audio.controls = true;
+          bodyEl.appendChild(audio);
+          bodyEl.appendChild(el("div", "preview-note", data.name || ""));
           break;
         }
         case "pdf": {

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-22
+
+### Added
+
+- **More previews.** SolidWorks parts and assemblies now show the
+  preview image saved inside the file (with a note that full 3D needs a
+  STEP or STL export; SolidWorks geometry itself is a sealed format).
+  3MF and OBJ models convert on the fly and spin in the same 3D viewer
+  as STL. IGES joins STEP in the CAD converter. Videos and audio play
+  right in the preview, and zip files list what is inside. PDF preview
+  was already there and stays.
+
 ## [0.12.0] - 2026-07-18
 
 ### Added

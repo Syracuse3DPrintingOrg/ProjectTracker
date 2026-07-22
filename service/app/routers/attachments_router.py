@@ -59,6 +59,57 @@ def preview(attachment_id: int):
     return attachments.preview(att)
 
 
+@router.get("/attachments/{attachment_id}/as-stl")
+def as_stl(attachment_id: int):
+    """3MF and OBJ converted to STL on the fly (cached) so the 3D viewer
+    can render them."""
+    from fastapi.responses import Response
+
+    from ..services import mesh_convert
+
+    att = attachments.get(attachment_id)
+    if not att:
+        raise HTTPException(404)
+    ext = att["filename"].rsplit(".", 1)[-1].lower()
+    if ext not in attachments.CONVERTIBLE_MESH_EXTS:
+        raise HTTPException(422, "only 3MF and OBJ convert to STL")
+    source = attachments.path_for(att)
+    if not source.is_file():
+        raise HTTPException(410, "the stored file is gone")
+    cache = source.with_suffix(source.suffix + ".stl")
+    if not cache.is_file() or cache.stat().st_mtime < source.stat().st_mtime:
+        try:
+            data = (
+                mesh_convert.threemf_to_stl(source)
+                if ext == "3mf"
+                else mesh_convert.obj_to_stl(source)
+            )
+        except mesh_convert.ConvertError as exc:
+            raise HTTPException(422, str(exc))
+        cache.write_bytes(data)
+    return Response(cache.read_bytes(), media_type="model/stl")
+
+
+@router.get("/attachments/{attachment_id}/embedded-preview")
+def embedded_preview(attachment_id: int):
+    """The preview image a SolidWorks file carries inside its container."""
+    from fastapi.responses import Response
+
+    from ..services import mesh_convert
+
+    att = attachments.get(attachment_id)
+    if not att:
+        raise HTTPException(404)
+    path = attachments.path_for(att)
+    if not path.is_file():
+        raise HTTPException(410, "the stored file is gone")
+    found = mesh_convert.extract_solidworks_preview(path)
+    if not found:
+        raise HTTPException(404, "no embedded preview in this file")
+    data, mime = found
+    return Response(data, media_type=mime)
+
+
 @router.delete("/attachments/{attachment_id}", status_code=204)
 def delete(attachment_id: int):
     if not attachments.delete(attachment_id):

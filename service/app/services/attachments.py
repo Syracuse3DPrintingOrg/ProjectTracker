@@ -28,12 +28,19 @@ TEXT_EXTS = {
     "html", "css", "sh", "c", "cpp", "h", "ino", "gcode", "scad", "xml",
 }
 IMAGE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"}
-MODEL_NOTES = {
-    "sldprt": "SolidWorks parts are proprietary; export STEP for exchange or STL for an in-browser preview.",
-    "sldasm": "SolidWorks assemblies are proprietary; export STEP for exchange or STL for an in-browser preview.",
-    "3mf": "3MF preview is not built in yet; slice it or export STL for an in-browser preview.",
-    "obj": "OBJ preview is not built in yet; export STL for an in-browser preview.",
-}
+VIDEO_EXTS = {"mp4", "webm", "mov", "m4v"}
+AUDIO_EXTS = {"mp3", "wav", "ogg", "flac", "m4a"}
+CONVERTIBLE_MESH_EXTS = {"3mf", "obj"}
+SOLIDWORKS_EXTS = {"sldprt", "sldasm", "slddrw", "eprt", "easm"}
+SOLIDWORKS_NOTE = (
+    "SolidWorks files are proprietary, so this is the preview image saved"
+    " inside the file, not live geometry. Export STEP or STL for a full 3D"
+    " preview."
+)
+SOLIDWORKS_NO_PREVIEW_NOTE = (
+    "This SolidWorks file carries no embedded preview image. Export STEP"
+    " for exchange or STL for an in-browser 3D preview."
+)
 
 
 def _dir() -> Path:
@@ -162,13 +169,58 @@ def preview(att: dict) -> dict:
         return {**base, "kind": "image", "url": url}
     if ext == "pdf":
         return {**base, "kind": "pdf", "url": url}
+    if ext in VIDEO_EXTS:
+        return {**base, "kind": "video", "url": url}
+    if ext in AUDIO_EXTS:
+        return {**base, "kind": "audio", "url": url}
     if ext == "stl":
         return {**base, "kind": "stl", "url": url}
+    if ext in CONVERTIBLE_MESH_EXTS:
+        return {
+            **base,
+            "kind": "stl",
+            "url": f"/api/attachments/{att['id']}/as-stl",
+            "converted_from": ext,
+        }
     if ext in ("step", "stp"):
-        return {**base, "kind": "step", "url": url}
-    if ext in MODEL_NOTES:
-        return {**base, "kind": "model-unsupported", "note": MODEL_NOTES[ext]}
+        return {**base, "kind": "step", "url": url, "format": "step"}
+    if ext in ("iges", "igs"):
+        return {**base, "kind": "step", "url": url, "format": "iges"}
+    if ext == "zip":
+        return {**base, **_preview_zip(path_for(att))}
+    if ext in SOLIDWORKS_EXTS:
+        from . import mesh_convert
+
+        found = mesh_convert.extract_solidworks_preview(path_for(att))
+        if found:
+            return {
+                **base,
+                "kind": "image",
+                "url": f"/api/attachments/{att['id']}/embedded-preview",
+                "note": SOLIDWORKS_NOTE,
+            }
+        return {**base, "kind": "model-unsupported", "note": SOLIDWORKS_NO_PREVIEW_NOTE}
     return {**base, "kind": "binary", "note": "no preview for this type; download to open it"}
+
+
+def _preview_zip(path: Path) -> dict:
+    """What is inside an archive, as a table."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+    except zipfile.BadZipFile:
+        return {"kind": "error", "note": "this zip could not be read"}
+    rows = [
+        [i.filename, f"{i.file_size:,}", f"{i.compress_size:,}"]
+        for i in infos[:TABLE_ROW_CAP]
+        if not i.is_dir()
+    ]
+    return {
+        "kind": "table",
+        "columns": ["file", "size (bytes)", "compressed"],
+        "rows": rows,
+        "truncated": len(infos) > TABLE_ROW_CAP,
+    }
 
 
 def _preview_csv(path: Path) -> dict:
