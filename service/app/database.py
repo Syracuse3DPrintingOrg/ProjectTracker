@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS cards (
     today INTEGER NOT NULL DEFAULT 0,
     today_position INTEGER NOT NULL DEFAULT 0,
     recur_days INTEGER NOT NULL DEFAULT 0,
+    assignee_id INTEGER,
     position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -52,6 +53,24 @@ CREATE TABLE IF NOT EXISTS users (
     disabled INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS subtasks (
+    id INTEGER PRIMARY KEY,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS card_events (
+    id INTEGER PRIMARY KEY,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    actor TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_subtasks_card ON subtasks(card_id, position);
+CREATE INDEX IF NOT EXISTS idx_events_card ON card_events(card_id, id);
 CREATE TABLE IF NOT EXISTS attachments (
     id INTEGER PRIMARY KEY,
     card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
@@ -70,6 +89,12 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 CREATE INDEX IF NOT EXISTS idx_cards_column ON cards(column_id, position);
 CREATE INDEX IF NOT EXISTS idx_cards_today ON cards(today, today_position);
+CREATE TABLE IF NOT EXISTS user_today (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, card_id)
+);
 """
 
 
@@ -112,3 +137,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE cards ADD COLUMN recur_days INTEGER NOT NULL DEFAULT 0"
         )
+    if "assignee_id" not in card_cols:
+        conn.execute("ALTER TABLE cards ADD COLUMN assignee_id INTEGER")
+    # Personal Today lists arrived after 0.x installs shipped; the shared
+    # list stays in cards.today untouched, personal picks live here.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS user_today ("
+        " user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+        " card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,"
+        " position INTEGER NOT NULL DEFAULT 0,"
+        " PRIMARY KEY (user_id, card_id))"
+    )

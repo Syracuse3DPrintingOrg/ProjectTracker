@@ -74,12 +74,18 @@ def forget_machine(machine: str):
 @router.get("/dashboard/claude-code")
 def dashboard(request: Request):
     settings = config.load_settings()
+    context = _page_context(settings, request)
+    # The connector token is credentials; only admins (or an unlocked
+    # instance) get it rendered into the setup instructions.
+    token = ""
+    if context["is_admin"] or not context["auth_required"]:
+        token = _connector_token(settings)
     return templates.TemplateResponse(
         request,
         "dashboard_claude.html",
         {
-            **_page_context(settings, request),
-            "connector_token": _connector_token(settings),
+            **context,
+            "connector_token": token,
             "tracker_projects": store.list_projects(),
         },
     )

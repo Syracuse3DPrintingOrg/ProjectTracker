@@ -1,6 +1,8 @@
 /* Attachment preview: window.SQPreview.open(id) shows any attachment in a
    full-screen dialog. Tables, text, images, PDFs inline; STL models render
-   through SQStlViewer (stl-viewer.js). Everything else gets a download link. */
+   through SQStlViewer (stl-viewer.js); STEP models are tessellated in the
+   browser by the vendored occt-import-js WASM build, then rendered through
+   the same viewer. Everything else gets a download link. */
 (function () {
   "use strict";
 
@@ -113,6 +115,81 @@
     stlController = window.SQStlViewer.mount(canvas, buf);
   }
 
+  /* STEP support: the vendored occt-import-js (OpenCascade compiled to
+     WASM) tessellates the solid model in the browser; the resulting
+     triangles render through the same viewer STL uses. The script and its
+     WASM load once, on the first STEP preview, from our own /static. */
+  const OCCT_BASE = "/static/js/vendor/occt/";
+  let occtPromise = null;
+
+  function loadOcct() {
+    if (!occtPromise) {
+      occtPromise = new Promise((resolve, reject) => {
+        if (window.occtimportjs) { resolve(); return; }
+        const s = document.createElement("script");
+        s.src = OCCT_BASE + "occt-import-js.js";
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("Could not load the STEP converter."));
+        document.head.appendChild(s);
+      }).then(() => window.occtimportjs({
+        locateFile: (name) => OCCT_BASE + name,
+      })).catch((err) => {
+        occtPromise = null; // a failed load retries on the next preview
+        throw err;
+      });
+    }
+    return occtPromise;
+  }
+
+  function stepToTriangles(result) {
+    if (!result || !result.success || !result.meshes || !result.meshes.length) {
+      throw new Error("STEP conversion failed; download the file to open it.");
+    }
+    let floats = 0;
+    result.meshes.forEach((m) => { floats += m.index.array.length * 3; });
+    const soup = new Float32Array(floats);
+    let o = 0;
+    result.meshes.forEach((m) => {
+      const pos = m.attributes.position.array;
+      const idx = m.index.array;
+      for (let i = 0; i < idx.length; i++) {
+        const v = idx[i] * 3;
+        soup[o++] = pos[v];
+        soup[o++] = pos[v + 1];
+        soup[o++] = pos[v + 2];
+      }
+    });
+    if (!soup.length) throw new Error("STEP conversion failed; download the file to open it.");
+    return soup;
+  }
+
+  async function renderStep(data, fileUrl) {
+    const status = el("div", "preview-note", "Converting model… (first open loads the converter, give it a few seconds)");
+    bodyEl.className = "preview-body kind-note";
+    bodyEl.appendChild(status);
+    const fetched = fetch(data.url || fileUrl).then((resp) => {
+      if (!resp.ok) throw new Error("Could not fetch the model file.");
+      return resp.arrayBuffer();
+    });
+    const occt = await loadOcct();
+    const buf = await fetched;
+    // The dialog may have been closed, or another preview opened, meanwhile.
+    if (!status.isConnected) return;
+    let soup;
+    try {
+      soup = stepToTriangles(occt.ReadStepFile(new Uint8Array(buf), null));
+    } catch (err) {
+      throw new Error("STEP conversion failed; download the file to open it.");
+    }
+    if (!status.isConnected) return;
+    bodyEl.textContent = "";
+    bodyEl.className = "preview-body kind-step";
+    const canvas = el("canvas", "stl-canvas");
+    bodyEl.appendChild(canvas);
+    bodyEl.appendChild(el("div", "stl-hint", "Drag to rotate. Scroll or pinch to zoom."));
+    stlController = window.SQStlViewer.mountMesh(canvas, soup);
+  }
+
   async function open(attachmentId) {
     ensureDialog();
     cleanup();
@@ -174,6 +251,9 @@
         }
         case "stl":
           await renderStl(data, fileUrl);
+          break;
+        case "step":
+          await renderStep(data, fileUrl);
           break;
         default:
           // model-unsupported, binary, error, and anything new.

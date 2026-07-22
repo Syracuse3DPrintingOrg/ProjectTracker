@@ -54,9 +54,11 @@ def project_board(request: Request, project_id: int):
         if project.get("claude_path")
         else None
     )
-    from ..services import attachments
+    from ..services import attachments, users
 
     attachment_counts = attachments.counts_by_card(project_id)
+    subtask_counts = store.subtask_progress(project_id)
+    usernames = {u["id"]: u["username"] for u in users.list_users()}
     return templates.TemplateResponse(
         request,
         "board.html",
@@ -68,6 +70,8 @@ def project_board(request: Request, project_id: int):
             "columns": store.list_columns(project_id),
             "cards": store.list_cards(project_id),
             "attachment_counts": attachment_counts,
+            "subtask_counts": subtask_counts,
+            "usernames": usernames,
             "today_ids": [c["id"] for c in store.list_today()],
         },
     )

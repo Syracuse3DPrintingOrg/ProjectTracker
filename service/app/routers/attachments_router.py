@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from ..services import attachments, store
@@ -11,14 +11,19 @@ router = APIRouter(prefix="/api", tags=["attachments"])
 
 
 @router.post("/cards/{card_id}/attachments", status_code=201)
-async def upload(card_id: int, file: UploadFile):
+async def upload(card_id: int, file: UploadFile, request: Request):
     if not store.get_card(card_id):
         raise HTTPException(404)
     data = await file.read()
     try:
-        return attachments.save(card_id, file.filename or "file", data)
+        saved = attachments.save(card_id, file.filename or "file", data)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
+    from ..services import card_events
+    from .boards import actor
+
+    card_events.log(card_id, actor(request), "attached", saved["filename"])
+    return saved
 
 
 @router.get("/cards/{card_id}/attachments")

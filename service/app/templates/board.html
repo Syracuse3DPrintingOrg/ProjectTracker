@@ -56,7 +56,13 @@
   </div>
 
   <aside class="today-rail">
-    <h2>Today's Tasks</h2>
+    <div class="rail-head">
+      <h2>Today's Tasks</h2>
+      <select id="today-list-select" hidden title="Whose list to show">
+        <option value="shared">Everyone</option>
+        <option value="mine">Mine</option>
+      </select>
+    </div>
     <div class="hint">Drag cards here to put them on the wall display.</div>
     <div class="cards" id="today-list" data-today="1"></div>
     <div class="add-card">
@@ -73,6 +79,14 @@
     <input name="title" required maxlength="500" autocomplete="off">
     <label>Description <span class="muted">(lines like "- [ ] step" become the checklist)</span></label>
     <textarea name="description" rows="7"></textarea>
+    <div id="subtasks-box" hidden>
+      <label>Subtasks <span class="muted" id="subtask-progress"></span></label>
+      <div id="subtask-list"></div>
+      <div class="subtask-add">
+        <input id="subtask-new" placeholder="Add a subtask" maxlength="300" autocomplete="off">
+        <button type="button" id="subtask-add-btn">Add</button>
+      </div>
+    </div>
     <div id="checklist-box" hidden>
       <label>Checklist</label>
       <div id="checklist-items"></div>
@@ -113,6 +127,10 @@
     </div>
     <label>Labels <span class="muted">(comma separated)</span></label>
     <input name="labels" autocomplete="off">
+    <div id="assignee-row" hidden>
+      <label>Assignee</label>
+      <select name="assignee_id"><option value="">Nobody yet</option></select>
+    </div>
     <div class="dialog-actions" id="assist-actions" hidden>
       <button type="button" id="assist-subtasks">AI: break into subtasks</button>
       <button type="button" id="assist-describe">AI: draft description</button>
@@ -121,6 +139,14 @@
     </div>
     <div class="dialog-actions" id="handoff-actions" hidden>
       <button type="button" id="send-to-ai" title="Package this card as a prompt for an outside AI">Send to AI</button>
+    </div>
+    <div id="activity-box" hidden>
+      <label>Activity</label>
+      <div id="activity-feed"></div>
+      <div class="subtask-add" id="comment-row">
+        <input id="comment-new" placeholder="Write a comment" maxlength="2000" autocomplete="off">
+        <button type="button" id="comment-post">Post</button>
+      </div>
     </div>
     <div class="dialog-actions">
       <button type="submit" class="primary" value="save">Save</button>
@@ -184,7 +210,8 @@
     projectId: {{ project.id }},
     aiConfigured: {{ 'true' if ai_configured else 'false' }},
     todayIds: {{ today_ids | tojson }},
-    claudePath: {{ project.claude_path | tojson }}
+    claudePath: {{ project.claude_path | tojson }},
+    userId: {{ (user['id'] if user else none) | tojson }}
   };
 </script>
 {% endblock %}

@@ -17,7 +17,7 @@
     <a class="pill" href="/today">Today</a>
     <a class="pill" href="/calendar">Calendar</a>
     <a class="pill" href="/dashboard/claude-code">Claude Code</a>
-    <a class="pill" href="/displays">Displays</a>
+    {% if is_admin or not auth_required %}<a class="pill" href="/displays">Displays</a>{% endif %}
   </div>
   <div class="nav-links">
     {% block nav %}{% endblock %}

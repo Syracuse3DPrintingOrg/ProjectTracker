@@ -12,15 +12,15 @@ SQLite file, no accounts to create.
 - **Boards**: multiple projects, each with its own status columns (Backlog,
   To Do, In Progress, Done by default; rename, add, and reorder freely).
 - **Cards**: title, description, priority (P0 to P4), due date, labels,
-  checklists ("- [ ] step" lines become tickable items with progress
-  shown on the board), and recurrence (a finished recurring card respawns
-  at the start with a fresh due date). Drag cards between columns or
-  reorder within one, on desktop or touch. Columns take optional
-  work-in-progress limits.
+  subtasks, checklists, an assignee, comments with an activity trail,
+  and recurrence (a finished recurring card respawns at the start with a
+  fresh due date). Drag cards between columns or reorder within one, on
+  desktop or touch. Columns take optional work-in-progress limits.
 - **Attachments and previews**: drag any file onto a card. CSV and Excel
   preview as tables, Word and text as text, images and PDFs inline, and
-  STL models in a built-in 3D viewer. STEP and SolidWorks files are
-  stored and downloadable (export an STL alongside for a preview).
+  STL and STEP models in a built-in 3D viewer (the STEP converter ships
+  with SQ and runs in your browser). SolidWorks files are stored and
+  downloadable; export STEP or STL from SolidWorks for a preview.
 - **Hand a card to any AI**: one button packs a card into a
   self-contained prompt for Claude, ChatGPT, Gemini, or a Claude Code
   command; the built-in AI can also research approaches for a card.

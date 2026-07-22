@@ -1,11 +1,28 @@
 """REST API for projects, columns, and cards."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..services import checklist, store
+from ..services import card_events, checklist, store
 
 router = APIRouter(prefix="/api", tags=["boards"])
+
+
+def actor(request: Request) -> str:
+    user = getattr(request.state, "user", None)
+    return user["username"] if user else "someone"
+
+
+def list_owner(request: Request, chosen: str) -> int | None:
+    """Resolve a Today-list choice to a personal list owner id.
+
+    "mine" means the signed-in user's list; anything else, an anonymous
+    caller, or an API key (no user id) lands on the shared list."""
+    if chosen == "mine":
+        user = getattr(request.state, "user", None)
+        if user and user.get("id"):
+            return user["id"]
+    return None
 
 
 class ProjectIn(BaseModel):
@@ -46,6 +63,22 @@ class CardUpdate(BaseModel):
     priority: int | None = Field(default=None, ge=0, le=4)
     due_date: str | None = None
     recur_days: int | None = Field(default=None, ge=0, le=365)
+    assignee_id: int | None = None
+    clear_assignee: bool = False
+
+
+class SubtaskIn(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+
+
+class SubtaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    done: bool | None = None
+    position: int | None = None
+
+
+class CommentIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class MoveIn(BaseModel):
@@ -56,6 +89,7 @@ class MoveIn(BaseModel):
 class TodayIn(BaseModel):
     today: bool
     position: int | None = None
+    list: str = "shared"
 
 
 class ChecklistIn(BaseModel):
@@ -68,6 +102,7 @@ class ImportIn(BaseModel):
     projects: list = []
     columns: list = []
     cards: list = []
+    subtasks: list = []
 
 
 # ---- projects ----
@@ -161,10 +196,10 @@ def delete_column(column_id: int):
 # ---- cards ----
 
 @router.post("/cards", status_code=201)
-def create_card(body: CardIn):
+def create_card(body: CardIn, request: Request):
     if not store.get_project(body.project_id):
         raise HTTPException(404, "project not found")
-    return store.create_card(
+    card = store.create_card(
         body.project_id,
         body.column_id,
         body.title.strip(),
@@ -174,6 +209,8 @@ def create_card(body: CardIn):
         due_date=body.due_date,
         recur_days=body.recur_days,
     )
+    card_events.log(card["id"], actor(request), "created")
+    return card
 
 
 @router.get("/cards/{card_id}")
@@ -185,10 +222,27 @@ def get_card(card_id: int):
 
 
 @router.patch("/cards/{card_id}")
-def update_card(card_id: int, body: CardUpdate):
-    if not store.get_card(card_id):
+def update_card(card_id: int, body: CardUpdate, request: Request):
+    card = store.get_card(card_id)
+    if not card:
         raise HTTPException(404)
-    return store.update_card(card_id, **body.model_dump(exclude_unset=True))
+    updates = body.model_dump(exclude_unset=True)
+    clear = updates.pop("clear_assignee", False)
+    if clear:
+        updates["assignee_id"] = None
+    if "assignee_id" in updates and updates["assignee_id"] is not None:
+        from ..services import users
+
+        target = users.get_user(updates["assignee_id"])
+        if not target:
+            raise HTTPException(422, "no such user")
+        if updates["assignee_id"] != card["assignee_id"]:
+            card_events.log(
+                card_id, actor(request), "assigned", f"to {target['username']}"
+            )
+    elif clear and card["assignee_id"]:
+        card_events.log(card_id, actor(request), "assigned", "to nobody")
+    return store.update_card(card_id, **updates)
 
 
 @router.delete("/cards/{card_id}", status_code=204)
@@ -200,11 +254,81 @@ def delete_card(card_id: int):
 
 
 @router.post("/cards/{card_id}/move")
-def move_card(card_id: int, body: MoveIn):
+def move_card(card_id: int, body: MoveIn, request: Request):
+    before = store.get_card(card_id)
     card = store.move_card(card_id, body.column_id, body.position)
     if not card:
         raise HTTPException(404, "card or column not found")
+    if before and card["column_id"] != before["column_id"]:
+        columns = {c["id"]: c for c in store.list_columns(card["project_id"])}
+        if card["column_id"] != body.column_id:
+            card_events.log(card_id, actor(request), "respawned")
+        else:
+            target = columns.get(card["column_id"])
+            card_events.log(
+                card_id, actor(request), "moved",
+                f"to {target['name']}" if target else "",
+            )
     return card
+
+
+# ---- subtasks ----
+
+@router.get("/cards/{card_id}/subtasks")
+def list_subtasks(card_id: int):
+    if not store.get_card(card_id):
+        raise HTTPException(404)
+    return store.list_subtasks(card_id)
+
+
+@router.post("/cards/{card_id}/subtasks", status_code=201)
+def create_subtask(card_id: int, body: SubtaskIn):
+    if not store.get_card(card_id):
+        raise HTTPException(404)
+    return store.create_subtask(card_id, body.title)
+
+
+@router.patch("/subtasks/{subtask_id}")
+def update_subtask(subtask_id: int, body: SubtaskUpdate):
+    subtask = store.update_subtask(subtask_id, **body.model_dump(exclude_unset=True))
+    if not subtask:
+        raise HTTPException(404)
+    return subtask
+
+
+@router.delete("/subtasks/{subtask_id}", status_code=204)
+def delete_subtask(subtask_id: int):
+    if not store.delete_subtask(subtask_id):
+        raise HTTPException(404)
+
+
+# ---- comments and activity ----
+
+@router.get("/cards/{card_id}/events")
+def list_events(card_id: int):
+    if not store.get_card(card_id):
+        raise HTTPException(404)
+    return card_events.list_for_card(card_id)
+
+
+@router.post("/cards/{card_id}/comments", status_code=201)
+def add_comment(card_id: int, body: CommentIn, request: Request):
+    if not store.get_card(card_id):
+        raise HTTPException(404)
+    card_events.log(card_id, actor(request), "comment", body.text.strip())
+    return card_events.list_for_card(card_id)[-1]
+
+
+@router.get("/assignees")
+def list_assignees():
+    """Users a card can be assigned to; open to every signed-in role."""
+    from ..services import users
+
+    return [
+        {"id": u["id"], "username": u["username"]}
+        for u in users.list_users()
+        if not u["disabled"]
+    ]
 
 
 @router.post("/cards/{card_id}/checklist")
@@ -249,6 +373,13 @@ def handoff(card_id: int):
         lines.append(f"Labels: {card['labels']}")
     if card["description"].strip():
         lines += ["", "Details:", card["description"].strip()]
+    subtasks = store.list_subtasks(card_id)
+    if subtasks:
+        done_n = sum(1 for s in subtasks if s["done"])
+        lines += ["", f"Subtasks ({done_n}/{len(subtasks)} done):"]
+        lines += [
+            f"- [{'x' if s['done'] else ' '}] {s['title']}" for s in subtasks
+        ]
     if items:
         done = sum(1 for i in items if i["checked"])
         lines += ["", f"Checklist ({done}/{len(items)} done):"]
@@ -289,14 +420,16 @@ def import_data(body: ImportIn):
     if not body.confirm:
         raise HTTPException(400, "set confirm=true; the import replaces everything")
     counts = store.import_data(
-        {"projects": body.projects, "columns": body.columns, "cards": body.cards}
+        {"projects": body.projects, "columns": body.columns,
+         "cards": body.cards, "subtasks": body.subtasks}
     )
     return {"ok": True, **counts}
 
 
 @router.post("/cards/{card_id}/today")
-def set_today(card_id: int, body: TodayIn):
-    card = store.set_today(card_id, body.today, body.position)
+def set_today(card_id: int, body: TodayIn, request: Request):
+    owner = list_owner(request, body.list)
+    card = store.set_today(card_id, body.today, body.position, owner=owner)
     if not card:
         raise HTTPException(404)
     return card
@@ -322,10 +455,10 @@ def calendar_cards(start: str, end: str, projects: str = ""):
 
 
 @router.get("/today")
-def list_today():
-    return store.list_today()
+def list_today(request: Request, list: str = "shared"):
+    return store.list_today(owner=list_owner(request, list))
 
 
 @router.post("/today/clear-done")
-def clear_done_today():
-    return {"cleared": store.clear_done_today()}
+def clear_done_today(request: Request, list: str = "shared"):
+    return {"cleared": store.clear_done_today(owner=list_owner(request, list))}

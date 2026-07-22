@@ -159,9 +159,18 @@ def set_wip_limit(column_id: int, limit: int) -> None:
         )
 
 
-def plan_candidates(limit: int = 40) -> list[dict]:
-    """Open cards worth considering for today: not already on the Today
-    list, in active projects, ordered by due date then priority."""
+def plan_candidates(limit: int = 40, owner: int | None = None) -> list[dict]:
+    """Open cards worth considering for today: not already on the target
+    Today list (shared, or owner's personal one), in active projects,
+    ordered by due date then priority."""
+    if owner is None:
+        not_listed = "cards.today = 0"
+        args: list = [limit]
+    else:
+        not_listed = (
+            "cards.id NOT IN (SELECT card_id FROM user_today WHERE user_id = ?)"
+        )
+        args = [owner, limit]
     with database.connect() as conn:
         return _rows(
             conn.execute(
@@ -171,12 +180,35 @@ def plan_candidates(limit: int = 40) -> list[dict]:
                 " JOIN projects ON projects.id = cards.project_id"
                 " JOIN columns ON columns.id = cards.column_id"
                 " WHERE projects.archived = 0 AND projects.status = 'active'"
-                " AND columns.is_done = 0 AND cards.today = 0"
+                f" AND columns.is_done = 0 AND {not_listed}"
                 " ORDER BY CASE WHEN cards.due_date = '' THEN 1 ELSE 0 END,"
                 " cards.due_date, cards.priority, cards.id LIMIT ?",
-                (limit,),
+                args,
             )
         )
+
+
+def due_lists(soon_days: int = 3) -> dict:
+    """Open cards past due and due within soon_days, across active
+    projects, for the kiosk footer views."""
+    sql = (
+        "SELECT cards.id, cards.title, cards.due_date, cards.priority,"
+        " projects.name AS project_name"
+        " FROM cards"
+        " JOIN projects ON projects.id = cards.project_id"
+        " JOIN columns ON columns.id = cards.column_id"
+        " WHERE projects.archived = 0 AND projects.status = 'active'"
+        " AND columns.is_done = 0 AND cards.due_date != ''"
+        " AND cards.due_date <= date('now', 'localtime', ?)"
+        " ORDER BY cards.due_date, cards.priority LIMIT 50"
+    )
+    with database.connect() as conn:
+        rows = _rows(conn.execute(sql, (f"+{soon_days} days",)))
+        today = conn.execute("SELECT date('now', 'localtime')").fetchone()[0]
+    return {
+        "overdue": [r for r in rows if r["due_date"] < today],
+        "due_soon": [r for r in rows if r["due_date"] >= today],
+    }
 
 
 def overdue_count() -> int:
@@ -186,7 +218,7 @@ def overdue_count() -> int:
             " JOIN columns ON columns.id = cards.column_id"
             " JOIN projects ON projects.id = cards.project_id"
             " WHERE projects.archived = 0 AND columns.is_done = 0"
-            " AND cards.due_date != '' AND cards.due_date < date('now')"
+            " AND cards.due_date != '' AND cards.due_date < date('now', 'localtime')"
         ).fetchone()[0]
 
 
@@ -250,7 +282,10 @@ def delete_column(column_id: int) -> bool:
 
 # ---- cards ----
 
-CARD_FIELDS = {"title", "description", "labels", "priority", "due_date", "recur_days"}
+CARD_FIELDS = {
+    "title", "description", "labels", "priority", "due_date", "recur_days",
+    "assignee_id",
+}
 
 
 def list_cards(project_id: int) -> list[dict]:
@@ -385,7 +420,7 @@ def _respawn(conn, card: dict, done_column_id: int) -> None:
     description = card["description"].replace("- [x]", "- [ ]").replace("- [X]", "- [ ]")
     conn.execute(
         "UPDATE cards SET column_id = ?, position = ?, description = ?,"
-        " due_date = date('now', ?), today = 0, today_position = 0,"
+        " due_date = date('now', 'localtime', ?), today = 0, today_position = 0,"
         " updated_at = datetime('now') WHERE id = ?",
         (target, pos, description, f"+{card['recur_days']} days", card["id"]),
     )
@@ -421,6 +456,7 @@ def export_data() -> dict:
             "projects": _rows(conn.execute("SELECT * FROM projects ORDER BY id")),
             "columns": _rows(conn.execute("SELECT * FROM columns ORDER BY id")),
             "cards": _rows(conn.execute("SELECT * FROM cards ORDER BY id")),
+            "subtasks": _rows(conn.execute("SELECT * FROM subtasks ORDER BY id")),
         }
 
 
@@ -429,7 +465,9 @@ def import_data(data: dict) -> dict:
     projects = data.get("projects") or []
     columns = data.get("columns") or []
     cards = data.get("cards") or []
+    subtasks = data.get("subtasks") or []
     with database.connect() as conn:
+        conn.execute("DELETE FROM subtasks")
         conn.execute("DELETE FROM cards")
         conn.execute("DELETE FROM columns")
         conn.execute("DELETE FROM projects")
@@ -455,14 +493,21 @@ def import_data(data: dict) -> dict:
             conn.execute(
                 "INSERT INTO cards (id, project_id, column_id, title, description,"
                 " labels, priority, due_date, today, today_position, recur_days,"
-                " position, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " assignee_id, position, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
                 " COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))",
                 (c.get("id"), c["project_id"], c["column_id"], c.get("title", ""),
                  c.get("description", ""), c.get("labels", ""), c.get("priority", 2),
                  c.get("due_date", ""), c.get("today", 0), c.get("today_position", 0),
-                 c.get("recur_days", 0), c.get("position", 0),
+                 c.get("recur_days", 0), c.get("assignee_id"), c.get("position", 0),
                  c.get("created_at"), c.get("updated_at")),
+            )
+        for s in subtasks:
+            conn.execute(
+                "INSERT INTO subtasks (id, card_id, title, done, position,"
+                " created_at) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))",
+                (s.get("id"), s["card_id"], s.get("title", ""), s.get("done", 0),
+                 s.get("position", 0), s.get("created_at")),
             )
     return {"projects": len(projects), "columns": len(columns), "cards": len(cards)}
 
@@ -494,27 +539,200 @@ def list_due_cards(
         return _rows(conn.execute(query, args))
 
 
-# ---- Today's Tasks ----
+# ---- subtasks ----
 
-def list_today() -> list[dict]:
-    """Today's tasks across all projects, with project name and done state."""
+def list_subtasks(card_id: int) -> list[dict]:
     with database.connect() as conn:
         return _rows(
             conn.execute(
-                "SELECT cards.*, projects.name AS project_name,"
-                " columns.name AS status, columns.is_done AS done"
-                " FROM cards"
-                " JOIN projects ON projects.id = cards.project_id"
-                " JOIN columns ON columns.id = cards.column_id"
-                " WHERE cards.today = 1"
-                " ORDER BY cards.today_position, cards.id"
+                "SELECT * FROM subtasks WHERE card_id = ? ORDER BY position, id",
+                (card_id,),
             )
         )
 
 
-def set_today(card_id: int, today: bool, position: int | None = None) -> dict | None:
+def create_subtask(card_id: int, title: str) -> dict:
     with database.connect() as conn:
-        if today:
+        pos = conn.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM subtasks WHERE card_id = ?",
+            (card_id,),
+        ).fetchone()[0]
+        cur = conn.execute(
+            "INSERT INTO subtasks (card_id, title, position) VALUES (?, ?, ?)",
+            (card_id, title.strip(), pos),
+        )
+        return dict(
+            conn.execute(
+                "SELECT * FROM subtasks WHERE id = ?", (cur.lastrowid,)
+            ).fetchone()
+        )
+
+
+def update_subtask(
+    subtask_id: int,
+    title: str | None = None,
+    done: bool | None = None,
+    position: int | None = None,
+) -> dict | None:
+    with database.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM subtasks WHERE id = ?", (subtask_id,)
+        ).fetchone()
+        if not row:
+            return None
+        if title is not None and title.strip():
+            conn.execute(
+                "UPDATE subtasks SET title = ? WHERE id = ?",
+                (title.strip(), subtask_id),
+            )
+        if done is not None:
+            conn.execute(
+                "UPDATE subtasks SET done = ? WHERE id = ?",
+                (1 if done else 0, subtask_id),
+            )
+        if position is not None:
+            ids = [
+                r["id"]
+                for r in conn.execute(
+                    "SELECT id FROM subtasks WHERE card_id = ? ORDER BY position, id",
+                    (row["card_id"],),
+                )
+            ]
+            ids.remove(subtask_id)
+            position = max(0, min(position, len(ids)))
+            ids.insert(position, subtask_id)
+            for i, sid in enumerate(ids):
+                conn.execute("UPDATE subtasks SET position = ? WHERE id = ?", (i, sid))
+        conn.execute(
+            "UPDATE cards SET updated_at = datetime('now') WHERE id = ?",
+            (row["card_id"],),
+        )
+        return dict(
+            conn.execute("SELECT * FROM subtasks WHERE id = ?", (subtask_id,)).fetchone()
+        )
+
+
+def delete_subtask(subtask_id: int) -> bool:
+    with database.connect() as conn:
+        cur = conn.execute("DELETE FROM subtasks WHERE id = ?", (subtask_id,))
+        return cur.rowcount > 0
+
+
+def subtask_progress(project_id: int) -> dict[int, tuple[int, int]]:
+    """{card_id: (done, total)} for every card in the project."""
+    with database.connect() as conn:
+        return {
+            r["card_id"]: (r["done_n"], r["total_n"])
+            for r in conn.execute(
+                "SELECT subtasks.card_id, SUM(subtasks.done) AS done_n,"
+                " COUNT(*) AS total_n FROM subtasks"
+                " JOIN cards ON cards.id = subtasks.card_id"
+                " WHERE cards.project_id = ? GROUP BY subtasks.card_id",
+                (project_id,),
+            )
+        }
+
+
+def subtask_progress_for_card(card_id: int) -> tuple[int, int]:
+    return subtask_progress_for_cards([card_id]).get(card_id, (0, 0))
+
+
+def subtask_progress_for_cards(card_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """One query for many cards; the kiosk polls this every few seconds."""
+    if not card_ids:
+        return {}
+    marks = ",".join("?" for _ in card_ids)
+    with database.connect() as conn:
+        return {
+            r["card_id"]: (r["d"] or 0, r["t"])
+            for r in conn.execute(
+                f"SELECT card_id, SUM(done) AS d, COUNT(*) AS t FROM subtasks"
+                f" WHERE card_id IN ({marks}) GROUP BY card_id",
+                card_ids,
+            )
+        }
+
+
+# ---- Today's Tasks ----
+#
+# Two kinds of list share one shape: the household list everyone sees
+# (cards.today / cards.today_position, the original columns, untouched so
+# older installs and the ESP32 payload keep working) and one personal
+# list per user in the user_today table. owner=None means the shared
+# list throughout.
+
+def list_today(owner: int | None = None) -> list[dict]:
+    """Today's tasks across all projects, with project name and done state.
+
+    owner picks a user's personal list; None is the shared list."""
+    select = (
+        "SELECT cards.*, projects.name AS project_name,"
+        " columns.name AS status, columns.is_done AS done"
+        " FROM cards"
+        " JOIN projects ON projects.id = cards.project_id"
+        " JOIN columns ON columns.id = cards.column_id"
+    )
+    with database.connect() as conn:
+        if owner is None:
+            return _rows(
+                conn.execute(
+                    select + " WHERE cards.today = 1"
+                    " ORDER BY cards.today_position, cards.id"
+                )
+            )
+        return _rows(
+            conn.execute(
+                select + " JOIN user_today ON user_today.card_id = cards.id"
+                " WHERE user_today.user_id = ?"
+                " ORDER BY user_today.position, cards.id",
+                (owner,),
+            )
+        )
+
+
+def set_today(
+    card_id: int,
+    today: bool,
+    position: int | None = None,
+    owner: int | None = None,
+) -> dict | None:
+    with database.connect() as conn:
+        if owner is not None:
+            exists = conn.execute(
+                "SELECT 1 FROM cards WHERE id = ?", (card_id,)
+            ).fetchone()
+            if not exists:
+                return None
+            if today:
+                ids = [
+                    r["card_id"]
+                    for r in conn.execute(
+                        "SELECT card_id FROM user_today WHERE user_id = ?"
+                        " ORDER BY position, card_id",
+                        (owner,),
+                    )
+                ]
+                if card_id in ids:
+                    ids.remove(card_id)
+                pos = len(ids) if position is None else max(0, min(position, len(ids)))
+                ids.insert(pos, card_id)
+                conn.execute(
+                    "INSERT OR IGNORE INTO user_today (user_id, card_id, position)"
+                    " VALUES (?, ?, 0)",
+                    (owner, card_id),
+                )
+                for i, cid in enumerate(ids):
+                    conn.execute(
+                        "UPDATE user_today SET position = ?"
+                        " WHERE user_id = ? AND card_id = ?",
+                        (i, owner, cid),
+                    )
+            else:
+                conn.execute(
+                    "DELETE FROM user_today WHERE user_id = ? AND card_id = ?",
+                    (owner, card_id),
+                )
+        elif today:
             ids = [
                 r["id"]
                 for r in conn.execute(
@@ -557,15 +775,24 @@ def toggle_done(card_id: int) -> dict | None:
         ).fetchone()
     if not target:
         return card
-    count = len(
-        [c for c in list_cards(card["project_id"]) if c["column_id"] == target["id"]]
-    )
+    with database.connect() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM cards WHERE column_id = ?", (target["id"],)
+        ).fetchone()[0]
     return move_card(card_id, target["id"], count)
 
 
-def clear_done_today() -> int:
+def clear_done_today(owner: int | None = None) -> int:
     """Drop finished cards off the Today list. Returns how many were cleared."""
     with database.connect() as conn:
+        if owner is not None:
+            cur = conn.execute(
+                "DELETE FROM user_today WHERE user_id = ? AND card_id IN"
+                " (SELECT id FROM cards WHERE column_id IN"
+                "  (SELECT id FROM columns WHERE is_done = 1))",
+                (owner,),
+            )
+            return cur.rowcount
         cur = conn.execute(
             "UPDATE cards SET today = 0, today_position = 0"
             " WHERE today = 1 AND column_id IN"

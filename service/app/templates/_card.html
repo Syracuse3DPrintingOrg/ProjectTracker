@@ -4,7 +4,10 @@
      data-due="{{ card.due_date }}" data-labels="{{ card.labels }}"
      data-check-done="{{ done }}" data-check-total="{{ total }}"
      data-recur="{{ card.recur_days }}"
-     data-attachments="{{ attachment_counts.get(card.id, 0) if attachment_counts is defined else 0 }}">
+     data-attachments="{{ attachment_counts.get(card.id, 0) if attachment_counts is defined else 0 }}"
+     {%- set sub = subtask_counts.get(card.id) if subtask_counts is defined else None %}
+     data-sub-done="{{ sub[0] if sub else 0 }}" data-sub-total="{{ sub[1] if sub else 0 }}"
+     data-assignee="{{ usernames.get(card.assignee_id, '') if usernames is defined else '' }}">
   <div class="card-title">{{ card.title }}</div>
   <div class="meta"></div>
 </div>

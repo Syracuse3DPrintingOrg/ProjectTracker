@@ -54,9 +54,21 @@
     .task.done .box { color: var(--ok); }
     .task.p0, .task.p1 { border-left: 4px solid var(--danger); }
     .empty { color: var(--muted); text-align: center; margin-top: 8vh; font-size: calc(var(--unit) * 1.05); }
-    footer { color: var(--muted); font-size: calc(var(--unit) * 0.68); padding-top: 1.2vh; display: flex; gap: 2vw; }
+    footer { color: var(--muted); font-size: calc(var(--unit) * 0.68); padding-top: 1.2vh; display: flex; gap: 2vw; align-items: center; }
     footer .offline { color: var(--warn); }
     footer .spacer { flex: 1; }
+    .brand-mark strong {
+      background: linear-gradient(100deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .foot-views { display: flex; gap: 1vw; }
+    .foot-view {
+      background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+      border-radius: 3px; font-size: calc(var(--unit) * 0.62);
+      padding: 0.3em 0.9em; cursor: pointer;
+    }
+    .foot-view.active { border-color: var(--accent); color: var(--text); }
+    .foot-view .over { color: var(--danger); font-weight: 700; }
     .toast {
       position: fixed; bottom: 3vh; left: 50%; transform: translateX(-50%);
       background: var(--surface); border: 1px solid var(--warn); color: var(--text);
@@ -77,6 +89,12 @@
   <div id="tasks"></div>
   <div class="empty" id="empty" hidden>Nothing on the list. The squirrel approves.</div>
   <footer>
+    <span class="brand-mark">&#128063; <strong>SQ</strong></span>
+    <nav class="foot-views">
+      <button class="foot-view active" data-view="today">Today</button>
+      <button class="foot-view" data-view="due_soon">Due soon <span id="due-soon-n"></span></button>
+      <button class="foot-view" data-view="overdue">Overdue <span id="overdue-n"></span></button>
+    </nav>
     <span id="status"></span>
     <span class="spacer"></span>
     <span id="extras"></span>
@@ -85,10 +103,17 @@
 
   <script>
     const HIDE_DONE = {{ 'true' if hide_done else 'false' }};
+    const LIST = {{ list | tojson }};
     const qs = new URLSearchParams(window.location.search);
     const token = qs.get("token");
     const suffix = token ? "?token=" + encodeURIComponent(token) : "";
+    const dataQs = new URLSearchParams();
+    if (token) dataQs.set("token", token);
+    if (LIST) dataQs.set("list", LIST);
+    const dataSuffix = dataQs.toString() ? "?" + dataQs.toString() : "";
     let busy = false;
+    let view = "today";
+    let lastData = null;
 
     function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 
@@ -99,39 +124,76 @@
       setTimeout(() => el.classList.remove("show"), 2200);
     }
 
+    function localDateStr() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    function taskRow(t, today) {
+      const overdue = t.due && t.due < today && !t.done;
+      let meta = "";
+      if (t.subtasks) meta += `<div>&#9656; ${esc(t.subtasks)}</div>`;
+      if (t.checklist) meta += `<div>&#9745; ${esc(t.checklist)}</div>`;
+      if (t.due) meta += `<div class="due-badge ${overdue ? "overdue" : ""}">${esc(t.due)}</div>`;
+      meta += `<div>${esc(t.project)}</div>`;
+      return `<div class="task ${t.done ? "done" : ""} p${t.priority}" data-id="${t.id}">` +
+        `<span class="box">${t.done ? "✓" : "▢"}</span>` +
+        `<span class="title">${esc(t.title)}</span>` +
+        `<span class="meta">${meta}</span></div>`;
+    }
+
     function render(data) {
-      const today = new Date().toISOString().slice(0, 10);
-      let tasks = data.tasks;
-      if (HIDE_DONE) tasks = tasks.filter(t => !t.done);
-      document.getElementById("tasks").innerHTML = tasks.map(t => {
-        const overdue = t.due && t.due < today && !t.done;
-        let meta = "";
-        if (t.checklist) meta += `<div>&#9745; ${esc(t.checklist)}</div>`;
-        if (t.due) meta += `<div class="due-badge ${overdue ? "overdue" : ""}">${esc(t.due)}</div>`;
-        meta += `<div>${esc(t.project)}</div>`;
-        return `<div class="task ${t.done ? "done" : ""} p${t.priority}" data-id="${t.id}">` +
-          `<span class="box">${t.done ? "✓" : "▢"}</span>` +
-          `<span class="title">${esc(t.title)}</span>` +
-          `<span class="meta">${meta}</span></div>`;
-      }).join("");
+      lastData = data;
+      const today = localDateStr();
+      let tasks;
+      if (view === "due_soon") tasks = data.due_soon_tasks || [];
+      else if (view === "overdue") tasks = data.overdue_tasks || [];
+      else {
+        tasks = data.tasks;
+        if (HIDE_DONE) tasks = tasks.filter(t => !t.done);
+      }
+      document.getElementById("tasks").innerHTML =
+        tasks.map(t => taskRow(t, today)).join("");
       document.getElementById("empty").hidden = tasks.length > 0;
       const done = data.tasks.length - data.remaining;
       document.getElementById("bar").style.width =
         data.tasks.length ? (100 * done / data.tasks.length) + "%" : "0%";
       document.getElementById("status").textContent =
-        data.tasks.length ? `${data.remaining} to go` : "";
+        view === "today" && data.tasks.length ? `${data.remaining} to go` : "";
+      const soonN = (data.due_soon_tasks || []).length;
+      document.getElementById("due-soon-n").textContent = soonN ? `(${soonN})` : "";
+      const overN = document.getElementById("overdue-n");
+      overN.textContent = data.overdue ? `(${data.overdue})` : "";
+      overN.className = data.overdue ? "over" : "";
       const extras = [];
-      if (data.overdue) extras.push(`${data.overdue} overdue on the boards`);
       if (data.stalest) extras.push(`\u{1F43F}️ ${data.stalest.name} is ${data.stalest.days_quiet}d quiet`);
       document.getElementById("extras").textContent = extras.join("  ·  ");
     }
 
+    document.querySelectorAll(".foot-view").forEach(btn => {
+      btn.addEventListener("click", () => {
+        view = btn.dataset.view;
+        document.querySelectorAll(".foot-view").forEach(b =>
+          b.classList.toggle("active", b === btn));
+        if (lastData) render(lastData);
+      });
+    });
+
+    let lastPayload = "";
+
     async function refresh() {
       try {
-        const resp = await fetch("/api/kiosk/data" + suffix, { cache: "no-store" });
+        const resp = await fetch("/api/kiosk/data" + dataSuffix, { cache: "no-store" });
         if (!resp.ok) throw new Error(resp.status);
-        render(await resp.json());
+        const text = await resp.text();
+        // Repaint only when something changed, so a scrolled list is not
+        // yanked back to the top every poll.
+        const comparable = text.replace(/"generated_at":"[^"]*",?/, "") + view;
+        if (comparable === lastPayload) return;
+        lastPayload = comparable;
+        render(JSON.parse(text));
       } catch (e) {
+        lastPayload = "";
         document.getElementById("status").innerHTML =
           '<span class="offline">Connection lost, retrying&hellip;</span>';
       }

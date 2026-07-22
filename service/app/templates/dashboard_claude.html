@@ -8,6 +8,9 @@
 
 <div id="dash-empty" class="panel" hidden>
   <h1>No machines reporting yet</h1>
+  {% if not connector_token %}
+  <p class="muted">An admin can set up the connector from this page.</p>
+  {% else %}
   <p>Run the connector on each machine where Claude Code works:</p>
   <pre style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.8rem; overflow-x: auto;">python3 claude-code-connector.py \
   --url {{ request.base_url }} \
@@ -17,6 +20,7 @@
     report faster, or install it as a service with <code>--install</code> (systemd).
     It reads Claude Code's local session files and each repo's
     <code>.beads/issues.jsonl</code>; nothing else leaves the machine.</p>
+  {% endif %}
 </div>
 
 <section class="dash-needs" id="dash-needs-input" hidden></section>

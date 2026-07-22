@@ -26,7 +26,25 @@
   }
   form.kind.addEventListener("change", syncKindRows);
 
-  function openDialog(row) {
+  /* The "Shows" chooser: shared Today list, or one user's personal list.
+     The row only appears when the instance has users to choose from. */
+  let listUsers = null;
+  async function loadListUsers() {
+    if (listUsers === null) {
+      try { listUsers = await api("/api/assignees"); }
+      catch (e) { listUsers = []; }
+      const select = form.list;
+      listUsers.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = "user:" + u.id;
+        opt.textContent = u.username + "'s list";
+        select.appendChild(opt);
+      });
+    }
+    return listUsers;
+  }
+
+  async function openDialog(row) {
     form.display_id.value = row ? row.dataset.id : "";
     form.name.value = row ? row.dataset.name : "";
     form.kind.value = row ? row.dataset.kind : "browser";
@@ -37,6 +55,10 @@
     form.clock.value = params.clock === "0" ? "0" : "1";
     form.hide_done.value = params.hide_done || "";
     form.tv.checked = params.tv === "1";
+    const users = await loadListUsers();
+    document.getElementById("list-row").style.display = users.length ? "" : "none";
+    form.list.value = params.list || "";
+    if (params.list && form.list.value !== params.list) form.list.value = "";
     syncKindRows();
     dialog.showModal();
   }
@@ -52,6 +74,7 @@
     if (form.clock.value === "0") params.clock = "0";
     if (form.hide_done.value) params.hide_done = form.hide_done.value;
     if (form.tv.checked) params.tv = "1";
+    if (form.list.value) params.list = form.list.value;
     const body = {
       name: form.name.value.trim(),
       kind: form.kind.value,

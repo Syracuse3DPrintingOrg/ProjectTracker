@@ -3,8 +3,9 @@
 Files live under data_dir/attachments as <uuid>.<ext> with the original
 name kept in the database, so nothing user-controlled touches the
 filesystem path. Previews are parsed server-side where a plain browser
-cannot do it (CSV, Excel, Word); images, PDF, and STL go to the browser
-raw, which renders them natively (STL through our own little viewer).
+cannot do it (CSV, Excel, Word); images, PDF, STL, and STEP go to the
+browser raw, which renders them natively (STL through our own little
+viewer, STEP tessellated in the browser by the vendored occt-import-js).
 """
 
 import csv
@@ -28,8 +29,6 @@ TEXT_EXTS = {
 }
 IMAGE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"}
 MODEL_NOTES = {
-    "step": "STEP is a solid model; SQ previews mesh formats. Export an STL alongside it for an in-browser preview.",
-    "stp": "STEP is a solid model; SQ previews mesh formats. Export an STL alongside it for an in-browser preview.",
     "sldprt": "SolidWorks parts are proprietary; export STEP for exchange or STL for an in-browser preview.",
     "sldasm": "SolidWorks assemblies are proprietary; export STEP for exchange or STL for an in-browser preview.",
     "3mf": "3MF preview is not built in yet; slice it or export STL for an in-browser preview.",
@@ -165,6 +164,8 @@ def preview(att: dict) -> dict:
         return {**base, "kind": "pdf", "url": url}
     if ext == "stl":
         return {**base, "kind": "stl", "url": url}
+    if ext in ("step", "stp"):
+        return {**base, "kind": "step", "url": url}
     if ext in MODEL_NOTES:
         return {**base, "kind": "model-unsupported", "note": MODEL_NOTES[ext]}
     return {**base, "kind": "binary", "note": "no preview for this type; download to open it"}

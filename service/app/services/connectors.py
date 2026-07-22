@@ -10,9 +10,12 @@ history, so the database stays out of it.
 
 import json
 import os
+import threading
 import time
 
 from .. import config
+
+_lock = threading.Lock()
 
 STATE_FILE = "connectors.json"
 
@@ -49,9 +52,10 @@ def store_snapshot(machine: str, projects: list[dict]) -> dict:
         "received_at": time.time(),
         "projects": [_clean_project(p) for p in projects if isinstance(p, dict)],
     }
-    data = _read()
-    data[machine] = snapshot
-    _write(data)
+    with _lock:
+        data = _read()
+        data[machine] = snapshot
+        _write(data)
     return snapshot
 
 
@@ -122,11 +126,12 @@ def snapshots() -> list[dict]:
 
 
 def forget_machine(machine: str) -> bool:
-    data = _read()
-    if machine not in data:
-        return False
-    del data[machine]
-    _write(data)
+    with _lock:
+        data = _read()
+        if machine not in data:
+            return False
+        del data[machine]
+        _write(data)
     return True
 
 

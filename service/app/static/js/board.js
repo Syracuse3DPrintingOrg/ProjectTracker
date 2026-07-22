@@ -34,6 +34,11 @@
     return items;
   }
 
+  function localDateStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
   function renderMeta(el) {
     const meta = el.querySelector(".meta");
     const p = parseInt(el.dataset.priority || "2", 10);
@@ -47,11 +52,20 @@
     }
     const att = parseInt(el.dataset.attachments || "0", 10);
     if (att) html += `<span class="chip" title="${att} file${att > 1 ? "s" : ""} attached">&#128206; ${att}</span>`;
+    const subTotal = parseInt(el.dataset.subTotal || "0", 10);
+    if (subTotal) {
+      const subDone = parseInt(el.dataset.subDone || "0", 10);
+      html += `<span class="chip ${subDone === subTotal ? "check-full" : ""}" title="Subtasks">&#9656; ${subDone}/${subTotal}</span>`;
+    }
+    if (el.dataset.assignee) {
+      const initials = el.dataset.assignee.slice(0, 2).toUpperCase();
+      html += `<span class="chip assignee-chip" title="Assigned to ${esc(el.dataset.assignee)}">${esc(initials)}</span>`;
+    }
     const recur = parseInt(el.dataset.recur || "0", 10);
     if (recur) html += `<span class="chip" title="Repeats every ${recur} day${recur > 1 ? "s" : ""}">&#8635; ${recur}d</span>`;
     if (p !== 2) html += `<span class="chip p${p}">P${p}</span>`;
     if (due) {
-      const overdue = due < new Date().toISOString().slice(0, 10);
+      const overdue = due < localDateStr();
       html += `<span class="chip due ${overdue ? "overdue" : ""}">${esc(due)}</span>`;
     }
     labels.forEach(l => { html += `<span class="chip">${esc(l)}</span>`; });
@@ -107,8 +121,28 @@
     });
   }
 
+  /* Whose Today list the rail shows: the shared one, or the signed-in
+     user's personal one. The choice sticks per browser. */
+  const listSelect = document.getElementById("today-list-select");
+  let todayList = "shared";
+  if (window.BOARD.userId && listSelect) {
+    listSelect.hidden = false;
+    const saved = localStorage.getItem("sq_today_list");
+    if (saved === "mine" || saved === "shared") todayList = saved;
+    listSelect.value = todayList;
+    listSelect.addEventListener("change", async () => {
+      todayList = listSelect.value;
+      localStorage.setItem("sq_today_list", todayList);
+      await refreshToday();
+    });
+  }
+
+  function todayQuery() {
+    return todayList === "mine" ? "?list=mine" : "";
+  }
+
   async function refreshToday() {
-    const tasks = await api("/api/today");
+    const tasks = await api("/api/today" + todayQuery());
     const list = document.getElementById("today-list");
     list.innerHTML = "";
     tasks.forEach(t => list.appendChild(todayEl(t)));
@@ -129,7 +163,7 @@
           if (to.dataset.today) {
             await api(`/api/cards/${cardId}/today`, {
               method: "POST",
-              body: JSON.stringify({ today: true, position: evt.newIndex }),
+              body: JSON.stringify({ today: true, position: evt.newIndex, list: todayList }),
             });
             await refreshToday();
             // The board keeps its own copy of the card; remove the dragged clone.
@@ -140,7 +174,7 @@
             }
           } else if (evt.from.dataset.today) {
             // Dragging out of Today removes it from the list.
-            await api(`/api/cards/${cardId}/today`, { method: "POST", body: JSON.stringify({ today: false }) });
+            await api(`/api/cards/${cardId}/today`, { method: "POST", body: JSON.stringify({ today: false, list: todayList }) });
             evt.item.remove();
             await refreshToday();
           } else {
@@ -249,7 +283,32 @@
     document.getElementById("attachments-box").hidden = !card;
     document.getElementById("attachment-list").textContent = "";
     document.getElementById("attachment-note").textContent = "";
-    if (card) refreshAttachments(card.id).catch(() => { /* list stays empty */ });
+    document.getElementById("subtasks-box").hidden = !card;
+    document.getElementById("subtask-list").textContent = "";
+    document.getElementById("subtask-progress").textContent = "";
+    document.getElementById("activity-box").hidden = !card;
+    document.getElementById("activity-feed").textContent = "";
+    if (card) {
+      refreshAttachments(card.id).catch(() => { /* list stays empty */ });
+      refreshSubtasks(card.id);
+      refreshActivity(card.id);
+      loadAssignees().then(users => {
+        const row = document.getElementById("assignee-row");
+        const select = form.assignee_id;
+        row.hidden = users.length === 0;
+        select.innerHTML = '<option value="">Nobody yet</option>';
+        users.forEach(u => {
+          const opt = document.createElement("option");
+          opt.value = u.id;
+          opt.textContent = u.username;
+          select.appendChild(opt);
+        });
+        select.value = card.assignee_id ? String(card.assignee_id) : "";
+        if (card.assignee_id && select.value !== String(card.assignee_id)) select.value = "";
+      });
+    } else {
+      document.getElementById("assignee-row").hidden = true;
+    }
     renderDialogChecklist();
     dialog.showModal();
   }
@@ -289,6 +348,10 @@
       recur_days: parseInt(form.recur_days.value, 10),
     };
     if (!body.title) return;
+    if (form.card_id.value && !document.getElementById("assignee-row").hidden) {
+      if (form.assignee_id.value) body.assignee_id = parseInt(form.assignee_id.value, 10);
+      else body.clear_assignee = true;
+    }
     try {
       if (form.card_id.value) {
         const card = await api(`/api/cards/${form.card_id.value}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -299,6 +362,8 @@
           el.dataset.due = card.due_date;
           el.dataset.labels = card.labels;
           el.dataset.recur = card.recur_days || 0;
+          const chosen = form.assignee_id.selectedOptions[0];
+          el.dataset.assignee = card.assignee_id && chosen ? chosen.textContent : "";
           el.querySelector(".card-title").textContent = card.title;
           syncCardChecklist(card);
           renderMeta(el);
@@ -338,10 +403,17 @@
     note.textContent = "Thinking...";
     try {
       const data = await api(`/api/assist/${kind}`, { method: "POST", body: JSON.stringify({ card_id: parseInt(id, 10) }) });
-      form.description.value = data.card.description;
-      syncCardChecklist(data.card);
-      renderDialogChecklist();
-      note.textContent = "Done. Review and save.";
+      if (kind === "subtasks") {
+        await refreshSubtasks(id);
+        note.textContent = data.subtasks.length
+          ? `Added ${data.subtasks.length} subtask${data.subtasks.length > 1 ? "s" : ""}.`
+          : "Nothing new to add.";
+      } else {
+        form.description.value = data.card.description;
+        syncCardChecklist(data.card);
+        renderDialogChecklist();
+        note.textContent = "Done. Review and save.";
+      }
     } catch (err) {
       note.textContent = err.message;
     }
@@ -520,6 +592,137 @@
   document.addEventListener("drop", (e) => {
     if (dragHasFiles(e) && !e.target.closest(".card, .dropzone")) e.preventDefault();
   }, true);
+
+  /* ---- subtasks ---- */
+
+  let assigneesCache = null;
+
+  async function loadAssignees() {
+    if (assigneesCache === null) {
+      try { assigneesCache = await api("/api/assignees"); }
+      catch (e) { assigneesCache = []; }
+    }
+    return assigneesCache;
+  }
+
+  function syncCardSubtasks(cardId, items) {
+    document.querySelectorAll(`.card[data-card-id="${cardId}"]`).forEach(el => {
+      el.dataset.subTotal = items.length;
+      el.dataset.subDone = items.filter(s => s.done).length;
+      renderMeta(el);
+    });
+    document.getElementById("subtask-progress").textContent =
+      items.length ? `${items.filter(s => s.done).length}/${items.length}` : "";
+  }
+
+  async function refreshSubtasks(cardId) {
+    let items = [];
+    try { items = await api(`/api/cards/${cardId}/subtasks`); } catch (e) { return; }
+    const list = document.getElementById("subtask-list");
+    list.textContent = "";
+    items.forEach(s => {
+      const row = document.createElement("div");
+      row.className = "subtask-row";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = !!s.done;
+      box.addEventListener("change", async () => {
+        try {
+          await api(`/api/subtasks/${s.id}`, { method: "PATCH", body: JSON.stringify({ done: box.checked }) });
+          await refreshSubtasks(cardId);
+        } catch (err) { box.checked = !box.checked; alert(err.message); }
+      });
+      const title = document.createElement("span");
+      title.className = "subtask-title" + (s.done ? " done" : "");
+      title.textContent = s.title;
+      title.title = "Click to rename";
+      title.addEventListener("click", async () => {
+        const next = prompt("Rename subtask:", s.title);
+        if (!next || !next.trim() || next.trim() === s.title) return;
+        try {
+          await api(`/api/subtasks/${s.id}`, { method: "PATCH", body: JSON.stringify({ title: next.trim() }) });
+          await refreshSubtasks(cardId);
+        } catch (err) { alert(err.message); }
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "attachment-delete";
+      del.textContent = "×";
+      del.title = "Delete subtask";
+      del.addEventListener("click", async () => {
+        try {
+          await api(`/api/subtasks/${s.id}`, { method: "DELETE" });
+          await refreshSubtasks(cardId);
+        } catch (err) { alert(err.message); }
+      });
+      row.append(box, title, del);
+      list.appendChild(row);
+    });
+    syncCardSubtasks(cardId, items);
+  }
+
+  async function addSubtask() {
+    const cardId = form.card_id.value;
+    const input = document.getElementById("subtask-new");
+    const title = input.value.trim();
+    if (!cardId || !title) return;
+    try {
+      await api(`/api/cards/${cardId}/subtasks`, { method: "POST", body: JSON.stringify({ title }) });
+      input.value = "";
+      input.focus();
+      await refreshSubtasks(cardId);
+    } catch (err) { alert(err.message); }
+  }
+
+  document.getElementById("subtask-add-btn").addEventListener("click", addSubtask);
+  document.getElementById("subtask-new").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addSubtask(); }
+  });
+
+  /* ---- activity and comments ---- */
+
+  function eventLine(ev) {
+    const row = document.createElement("div");
+    row.className = "activity-row" + (ev.kind === "comment" ? " is-comment" : "");
+    const head = document.createElement("span");
+    head.className = "muted";
+    const when = (ev.created_at || "").slice(0, 16);
+    const label = {
+      created: "created this card", moved: "moved it", assigned: "assigned it",
+      attached: "attached", respawned: "sent it back around",
+    }[ev.kind] || "";
+    head.textContent = ev.kind === "comment"
+      ? `${ev.actor} · ${when}`
+      : `${ev.actor} ${label}${ev.text ? " " + ev.text : ""} · ${when}`;
+    row.appendChild(head);
+    if (ev.kind === "comment") {
+      const body = document.createElement("div");
+      body.textContent = ev.text;
+      row.appendChild(body);
+    }
+    return row;
+  }
+
+  async function refreshActivity(cardId) {
+    let events = [];
+    try { events = await api(`/api/cards/${cardId}/events`); } catch (e) { return; }
+    const feed = document.getElementById("activity-feed");
+    feed.textContent = "";
+    events.forEach(ev => feed.appendChild(eventLine(ev)));
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  document.getElementById("comment-post").addEventListener("click", async () => {
+    const cardId = form.card_id.value;
+    const input = document.getElementById("comment-new");
+    const text = input.value.trim();
+    if (!cardId || !text) return;
+    try {
+      await api(`/api/cards/${cardId}/comments`, { method: "POST", body: JSON.stringify({ text }) });
+      input.value = "";
+      await refreshActivity(cardId);
+    } catch (err) { alert(err.message); }
+  });
 
   /* ---- AI research and handoff ---- */
 
@@ -711,8 +914,13 @@
       const p = stale[0];
       if (sessionStorage.getItem("nudge-dismissed") === String(p.id)) return;
       const line = NUDGE_LINES[p.id % NUDGE_LINES.length](p);
-      document.getElementById("nudge-text").innerHTML =
-        `${line} <a href="/project/${p.id}">Go finish it</a>`;
+      // textContent + createElement: a project name must never be markup.
+      const target = document.getElementById("nudge-text");
+      target.textContent = line + " ";
+      const go = document.createElement("a");
+      go.href = `/project/${p.id}`;
+      go.textContent = "Go finish it";
+      target.appendChild(go);
       document.getElementById("squirrel-nudge").hidden = false;
       document.getElementById("nudge-dismiss").onclick = () => {
         sessionStorage.setItem("nudge-dismissed", String(p.id));
@@ -780,7 +988,10 @@
       planBtn.disabled = true;
       planBtn.textContent = "Planning...";
       try {
-        const data = await api("/api/assist/plan-day", { method: "POST" });
+        const data = await api("/api/assist/plan-day", {
+          method: "POST",
+          body: JSON.stringify({ list: todayList }),
+        });
         await refreshToday();
         planBtn.textContent = data.added.length
           ? `Added ${data.added.length} task${data.added.length > 1 ? "s" : ""}`
@@ -797,7 +1008,7 @@
 
   document.getElementById("clear-done-today").addEventListener("click", async () => {
     try {
-      await api("/api/today/clear-done", { method: "POST" });
+      await api("/api/today/clear-done" + todayQuery(), { method: "POST" });
       await refreshToday();
     } catch (err) { alert(err.message); }
   });
@@ -849,7 +1060,7 @@
   document.getElementById("quick-filter").addEventListener("input", (e) => {
     const q = e.target.value.trim().toLowerCase();
     document.querySelectorAll("#board .card").forEach(el => {
-      const hay = (el.dataset.title + " " + el.dataset.labels).toLowerCase();
+      const hay = (el.dataset.title + " " + el.dataset.labels + " " + (el.dataset.assignee || "")).toLowerCase();
       el.style.display = !q || hay.includes(q) ? "" : "none";
     });
   });

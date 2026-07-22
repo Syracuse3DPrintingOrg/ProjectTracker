@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-18
+
+### Added
+
+- **Subtasks.** Cards now carry real subtasks: add, rename, tick, and
+  delete them in the card dialog, see progress on the board, in kiosk
+  rows, and in AI handoff prompts. The AI subtask button creates them
+  directly (existing text checklists still work).
+- **Assignees.** When your instance has users, every card takes an
+  assignee: an initials chip shows who owns it, the board filter matches
+  their name, and assignments land in the card's activity.
+- **Comments and activity.** Every card keeps a trail: created, moved,
+  assigned, files attached, and comments from anyone with member access.
+  The dialog shows the feed with a comment box at the bottom.
+- **STEP files preview in 3D.** STEP models now tessellate right in the
+  browser (the converter ships with SQ, nothing is fetched from the
+  internet) and render in the same spin-and-zoom viewer as STL.
+  SolidWorks files still need an exported STEP or STL.
+- **Personal Today lists.** Besides the shared list, each user gets
+  their own Today. The rail switches between Everyone and Mine, every
+  wall display can choose whose list it shows, and Plan my day fills
+  whichever list you are looking at.
+- **Kiosk footer.** The kiosk gained its squirrel badge and quick views:
+  Today, Due soon, and Overdue, each tappable to swap the list on
+  screen.
+
 ## [0.11.1] - 2026-07-16
 
 ### Fixed

@@ -185,6 +185,33 @@ label { display: block; margin: 0.6rem 0 0.2rem; color: var(--muted); font-size:
   font-size: 0.9rem;
 }
 .checklist-item input { width: auto; }
+.subtask-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.subtask-row input[type="checkbox"] { width: auto; }
+.subtask-title { flex: 1; cursor: pointer; }
+.subtask-title.done { text-decoration: line-through; opacity: 0.55; }
+.subtask-add { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+.subtask-add input { flex: 1; }
+.chip.assignee-chip {
+  background: linear-gradient(100deg, var(--accent), #5b8cff);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 700;
+}
+.activity-row {
+  font-size: 0.82rem;
+  margin: 0.35rem 0;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--border);
+}
+.activity-row.is-comment { border-left-color: var(--accent); }
+.activity-row.is-comment > div { margin-top: 0.1rem; }
+#activity-feed { max-height: 200px; overflow-y: auto; }
 .chip.due.overdue { color: #fff; background: var(--danger); border-color: var(--danger); }
 
 .add-card { margin: 0 0.5rem 0.6rem; }
@@ -206,6 +233,13 @@ label { display: block; margin: 0.6rem 0 0.2rem; color: var(--muted); font-size:
   max-height: 100%;
 }
 .today-rail h2 { font-size: 0.95rem; margin: 0; padding: 0.6rem 0.7rem 0.3rem; }
+.today-rail .rail-head { display: flex; align-items: center; }
+.today-rail .rail-head select {
+  margin: 0.45rem 0.7rem 0 auto;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.3rem;
+  width: auto;
+}
 .today-rail .hint { color: var(--muted); font-size: 0.75rem; padding: 0 0.7rem 0.4rem; }
 .today-rail .cards { flex: 1; }
 .today-rail .card .from { color: var(--muted); font-size: 0.72rem; margin-top: 0.2rem; }

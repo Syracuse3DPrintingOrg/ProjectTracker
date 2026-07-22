@@ -56,15 +56,24 @@
   <div class="empty" id="empty" hidden>Nothing on the list. Enjoy the slack.</div>
   <script>
     const HIDE_DONE = {{ 'true' if hide_done else 'false' }};
+    const LIST = {{ list | tojson }};
     const qs = new URLSearchParams(window.location.search);
     const token = qs.get("token");
-    const url = "/api/display" + (token ? "?token=" + encodeURIComponent(token) : "");
+    const urlQs = new URLSearchParams();
+    if (token) urlQs.set("token", token);
+    if (LIST) urlQs.set("list", LIST);
+    const url = "/api/display" + (urlQs.toString() ? "?" + urlQs.toString() : "");
     let lastPayload = "";
 
     function esc(t) { const d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 
+    function localDateStr() {
+      const d = new Date();
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
     function render(data) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localDateStr();
       let tasks = data.tasks;
       if (HIDE_DONE) tasks = tasks.filter(t => !t.done);
       document.getElementById("tasks").innerHTML = tasks.map(t => {
@@ -88,8 +97,10 @@
         const resp = await fetch(url, { cache: "no-store" });
         if (!resp.ok) throw new Error(resp.status);
         const text = await resp.text();
-        if (text !== lastPayload) {   // repaint only on change, kind to e-ink and OLED
-          lastPayload = text;
+        // Compare without the timestamp, or every poll looks like a change.
+        const comparable = text.replace(/"generated_at":"[^"]*",?/, "");
+        if (comparable !== lastPayload) {   // repaint only on change, kind to e-ink and OLED
+          lastPayload = comparable;
           render(JSON.parse(text));
         }
       } catch (e) {

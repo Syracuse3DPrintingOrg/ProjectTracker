@@ -17,9 +17,27 @@ from .pages import templates
 router = APIRouter(tags=["display"])
 
 
-def _compact_today() -> dict:
+def _resolve_list(chosen: str) -> int | None:
+    """Turn a display's list choice into a personal list owner id.
+
+    Displays are token-authed devices, so they name the user outright as
+    "user:<id>". Anything unrecognized (bad id, deleted user, "shared")
+    falls back to the shared list."""
+    if chosen.startswith("user:"):
+        from ..services import users
+
+        try:
+            uid = int(chosen.split(":", 1)[1])
+        except ValueError:
+            return None
+        if users.get_user(uid):
+            return uid
+    return None
+
+
+def _compact_today(owner: int | None = None) -> dict:
     tasks = []
-    for card in store.list_today():
+    for card in store.list_today(owner=owner):
         task = {
             "id": card["id"],
             "title": card["title"],
@@ -44,17 +62,20 @@ def _compact_today() -> dict:
 
 
 @router.get("/api/display")
-def display_data():
-    return _compact_today()
+def display_data(list: str = "shared"):
+    return _compact_today(owner=_resolve_list(list))
 
 
 @router.get("/api/kiosk/data")
-def kiosk_data():
+def kiosk_data(list: str = "shared"):
     """Everything the kiosk dashboard shows, in one poll."""
     nudge = store.nudge_data()
     tasks = []
-    for card in store.list_today():
+    today_cards = store.list_today(owner=_resolve_list(list))
+    sub_progress = store.subtask_progress_for_cards([c["id"] for c in today_cards])
+    for card in today_cards:
         done, total = checklist.progress(card["description"])
+        sub_done, sub_total = sub_progress.get(card["id"], (0, 0))
         tasks.append(
             {
                 "id": card["id"],
@@ -64,13 +85,23 @@ def kiosk_data():
                 "priority": card["priority"],
                 "due": card["due_date"],
                 "checklist": f"{done}/{total}" if total else "",
+                "subtasks": f"{sub_done}/{sub_total}" if sub_total else "",
             }
         )
+    due = store.due_lists()
+    def _slim(rows):
+        return [
+            {"id": r["id"], "title": r["title"], "project": r["project_name"],
+             "due": r["due_date"], "priority": r["priority"]}
+            for r in rows
+        ]
     return {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tasks": tasks,
         "remaining": sum(1 for t in tasks if not t["done"]),
-        "overdue": store.overdue_count(),
+        "overdue": len(due["overdue"]),
+        "overdue_tasks": _slim(due["overdue"]),
+        "due_soon_tasks": _slim(due["due_soon"]),
         "stalest": (
             {"name": nudge[0]["name"], "days_quiet": nudge[0]["days_quiet"]}
             if nudge and nudge[0]["days_quiet"] >= 3
@@ -80,14 +111,26 @@ def kiosk_data():
 
 
 @router.post("/api/kiosk/toggle/{card_id}")
-def kiosk_toggle(card_id: int):
+def kiosk_toggle(card_id: int, request: Request):
     """Tap a task on a kiosk: done, or back again. This is the one write
     a display token may make."""
+    before = store.get_card(card_id)
     card = store.toggle_done(card_id)
     if not card:
         from fastapi import HTTPException
 
         raise HTTPException(404)
+    if before and card["column_id"] != before["column_id"]:
+        from ..services import card_events
+
+        user = getattr(request.state, "user", None)
+        columns = {c["id"]: c["name"] for c in store.list_columns(card["project_id"])}
+        card_events.log(
+            card_id,
+            user["username"] if user else "kiosk",
+            "moved",
+            f"to {columns.get(card['column_id'], '')}".rstrip(),
+        )
     return card
 
 
@@ -114,6 +157,7 @@ def kiosk_page(request: Request, d: str = ""):
             "tv": params.get("tv", "") in ("1", "true"),
             "hide_done": params.get("hide_done", "") in ("1", "true"),
             "title": params.get("title", ""),
+            "list": params.get("list", ""),
         },
     )
 
@@ -147,5 +191,6 @@ def display_page(request: Request, d: str = ""):
             "hide_done": params.get("hide_done", "") in ("1", "true"),
             "tv": params.get("tv", "") in ("1", "true"),
             "title": params.get("title", ""),
+            "list": params.get("list", ""),
         },
     )

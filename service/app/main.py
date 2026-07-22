@@ -42,6 +42,14 @@ _OPEN_PREFIXES = ("/static/", "/login", "/health")
 _DISPLAY_PREFIXES = ("/display", "/api/display", "/kiosk", "/api/kiosk")
 
 
+def _is_display_path(path: str) -> bool:
+    """Exact-or-slash matching so /displays and /api/displays (the admin
+    surfaces) never fall under the display token's read-only reach."""
+    return any(
+        path == p or path.startswith(p + "/") for p in _DISPLAY_PREFIXES
+    )
+
+
 @app.middleware("http")
 async def session_guard(request: Request, call_next):
     from fastapi.responses import JSONResponse
@@ -53,7 +61,7 @@ async def session_guard(request: Request, call_next):
     if auth.auth_required():
         settings = config.load_settings()
         open_path = path in ("/login", "/health") or path.startswith(_OPEN_PREFIXES)
-        display_ok = path.startswith(_DISPLAY_PREFIXES) and auth.valid_display_token(
+        display_ok = _is_display_path(path) and auth.valid_display_token(
             request.query_params.get("token"), settings
         )
         # Connector reports carry their own token, checked by the endpoint.

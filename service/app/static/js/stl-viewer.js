@@ -1,8 +1,12 @@
-/* Dependency-free STL viewer on raw WebGL.
+/* Dependency-free mesh viewer on raw WebGL.
    window.SQStlViewer.mount(canvas, arrayBuffer) -> { dispose() }
-   Parses binary and ASCII STL, centers and scales the mesh, renders with a
-   directional-plus-ambient shader, orbits on drag, zooms on wheel or pinch.
-   Renders only on demand so an idle model costs no CPU. */
+     Parses binary and ASCII STL, then renders it.
+   window.SQStlViewer.mountMesh(canvas, float32Positions) -> { dispose() }
+     Same viewer for a pre-tessellated triangle soup (9 floats per
+     triangle); normals are computed per face. STEP previews use this.
+   Centers and scales the mesh, renders with a directional-plus-ambient
+   shader, orbits on drag, zooms on wheel or pinch. Renders only on
+   demand so an idle model costs no CPU. */
 (function () {
   "use strict";
 
@@ -198,8 +202,40 @@
     "  gl_FragColor = vec4(col, 1.0);\n" +
     "}\n";
 
+  /* Triangle soup (9 floats per triangle) to the viewer's mesh shape,
+     with flat per-face normals. */
+  function buildSoupMesh(positions) {
+    if (!(positions instanceof Float32Array)) positions = new Float32Array(positions);
+    const count = Math.floor(positions.length / 9);
+    if (!count) throw new Error("No triangles found in this model.");
+    capCheck(count);
+    if (positions.length !== count * 9) positions = positions.subarray(0, count * 9);
+    const normals = new Float32Array(count * 9);
+    for (let i = 0; i < count; i++) {
+      const base = i * 9;
+      const n = faceNormal(
+        positions[base], positions[base + 1], positions[base + 2],
+        positions[base + 3], positions[base + 4], positions[base + 5],
+        positions[base + 6], positions[base + 7], positions[base + 8]
+      );
+      for (let v = 0; v < 3; v++) {
+        normals[base + v * 3] = n[0];
+        normals[base + v * 3 + 1] = n[1];
+        normals[base + v * 3 + 2] = n[2];
+      }
+    }
+    return { positions: positions, normals: normals, count: count };
+  }
+
   function mount(canvas, arrayBuffer) {
-    const mesh = parse(arrayBuffer);
+    return mountParsed(canvas, parse(arrayBuffer));
+  }
+
+  function mountMesh(canvas, float32Positions) {
+    return mountParsed(canvas, buildSoupMesh(float32Positions));
+  }
+
+  function mountParsed(canvas, mesh) {
     normalizeMesh(mesh);
 
     let gl = canvas.getContext("webgl", { antialias: true }) ||
@@ -434,5 +470,5 @@
     return { dispose: dispose };
   }
 
-  window.SQStlViewer = { mount: mount };
+  window.SQStlViewer = { mount: mount, mountMesh: mountMesh };
 })();

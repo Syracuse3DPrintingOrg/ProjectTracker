@@ -20,8 +20,9 @@ from .. import config
 KINDS = ("browser", "androidtv", "esp32")
 
 # Look options a display may carry; values are kept as strings because
-# they travel as query parameters.
-PARAM_KEYS = ("theme", "scale", "clock", "hide_done", "tv", "title")
+# they travel as query parameters. "list" picks whose Today list the
+# screen shows: absent for the shared list, "user:<id>" for a personal one.
+PARAM_KEYS = ("theme", "scale", "clock", "hide_done", "tv", "title", "list")
 
 ADB_TIMEOUT = 20
 
@@ -109,6 +110,9 @@ def display_url(display: dict, base_url: str, settings: dict | None = None) -> s
 def api_url(display: dict, base_url: str, settings: dict | None = None) -> str:
     s = settings or config.load_settings()
     query = {}
+    chosen_list = (display.get("params") or {}).get("list", "")
+    if chosen_list:
+        query["list"] = chosen_list
     token = s.get("display_token", "")
     if token:
         query["token"] = token

@@ -20,13 +20,29 @@ SESSION_COOKIE = "tracker_session"
 SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
 
 
+_PBKDF2_ROUNDS = 200_000
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(8)
-    digest = hashlib.sha256((salt + password).encode()).hexdigest()
-    return f"{salt}${digest}"
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), _PBKDF2_ROUNDS
+    ).hex()
+    return f"pbkdf2${salt}${digest}"
 
 
 def check_password(password: str, stored: str) -> bool:
+    if stored.startswith("pbkdf2$"):
+        try:
+            _, salt, digest = stored.split("$", 2)
+        except ValueError:
+            return False
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), _PBKDF2_ROUNDS
+        ).hex()
+        return hmac.compare_digest(candidate, digest)
+    # Legacy format from before 0.12: single-round salted SHA-256. Still
+    # verifiable so nobody gets locked out; new hashes use PBKDF2.
     if "$" not in stored:
         return False
     salt, digest = stored.split("$", 1)
@@ -34,19 +50,29 @@ def check_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(candidate, digest)
 
 
+_secret_cache: dict[str, str] = {}
+
+
 def _secret_key() -> str:
-    """Persist a random signing key under the data dir on first use."""
+    """Persist a random signing key under the data dir on first use.
+
+    Cached per data dir so session checks stop re-reading the file on
+    every request."""
     env = os.environ.get("TRACKER_SECRET_KEY")
     if env:
         return env
     path = config.DATA_DIR / "secret_key"
+    cached = _secret_cache.get(str(path))
+    if cached:
+        return cached
     try:
-        return path.read_text().strip()
+        key = path.read_text().strip()
     except OSError:
         config.DATA_DIR.mkdir(parents=True, exist_ok=True)
         key = secrets.token_hex(32)
         path.write_text(key)
-        return key
+    _secret_cache[str(path)] = key
+    return key
 
 
 def _serializer() -> URLSafeTimedSerializer:

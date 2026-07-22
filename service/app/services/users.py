@@ -126,6 +126,10 @@ def delete_user(user_id: int) -> bool:
             return False
         if user["role"] == "admin" and _admin_count(conn, excluding=user_id) == 0:
             raise ValueError("SQ needs at least one active admin")
+        # Their cards stay; the assignment does not dangle.
+        conn.execute(
+            "UPDATE cards SET assignee_id = NULL WHERE assignee_id = ?", (user_id,)
+        )
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         return True
 
