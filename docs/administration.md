@@ -1,0 +1,66 @@
+# Administration
+
+Running a shared SQ: users and roles, the Settings panes, backups, and what the tokens can and cannot do.
+
+## Users and the three roles
+
+SQ starts with no logins at all. Add the first user (an admin, required) under Settings, Users and Access, and the instance locks: from then on every page needs a login, an API key, or a device token. Boards and the Today list are shared by everyone; SQ is a household or small-team tracker, and roles decide who can change what, not who can see which board.
+
+| Can they... | Admin | Member | Viewer |
+|---|---|---|---|
+| View boards, cards, calendar, and search | Yes | Yes | Yes |
+| Create, edit, move, and delete cards and projects | Yes | Yes | No |
+| Manage the Today list and comment on cards | Yes | Yes | No |
+| Pop a registered display up on a TV (show and hide) | Yes | Yes | No |
+| Change their own password | Yes | Yes | Yes |
+| Settings, users, API keys, display configuration | Yes | No | No |
+| Download backups and restore | Yes | No | No |
+
+A few guardrails: SQ always keeps at least one active admin, so the last one cannot be demoted, disabled, or deleted, and you cannot delete yourself while logged in. Deleting a user keeps their cards; the cards just lose their assignee. A disabled user cannot log in but keeps their account for later.
+
+## Accounts and passwords
+
+Every signed-in user has an Account page for changing their password (current password required, minimum 4 characters). Changing a password signs that user out everywhere, including the session that made the change: session cookies carry a fragment of the password hash, so older sessions stop working the moment it changes. That is the fastest way to cut off a lost laptop. Sessions otherwise last 30 days.
+
+Passwords are stored as salted PBKDF2 (SHA-256, 200,000 rounds). Accounts created before 0.12 used a simpler salted hash; those still verify, so nobody gets locked out by updating, and any password change moves the account onto PBKDF2. An even older install that used the single shared password gets that password migrated automatically into an `admin` account.
+
+## A tour of the Settings panes
+
+Settings is a sidebar of panes, admin only once logins are on:
+
+- **Overview**: stat tiles (projects, open cards, users, displays) plus health checks: is the data folder writable, is AI assist configured, are logins on. A red data-folder check is worth fixing before anything else, since everything lives there.
+- **AI Assist**: provider, keys, model, and the Test button. Covered on the [AI features](ai-features.md) page.
+- **General**: rename the tracker; the title shows in the header and on displays.
+- **Users and Access**: user accounts and API keys, covered above and on the [Integrations](integrations.md) page.
+- **Hardware**: the wall display registry, the display token, the tracker address handed to devices, and the Claude Code connector command.
+- **Backup and Restore**: covered below.
+- **Updates**: shows the version you are running and checks GitHub for the newest release. A tracker with no internet access just says it could not check, and that is fine; nothing else depends on the check. When an update is out, pull it:
+
+```bash
+docker pull ghcr.io/syracuse3dprintingorg/projecttracker:latest
+docker compose up -d
+```
+
+Your data folder carries everything over. On Unraid, use Check for Updates on the container instead.
+
+## Display and connector tokens
+
+Two credentials exist for devices, so a wall screen or a dev machine never sees a login page:
+
+- The **display token** authenticates wall displays once logins are on: displays call `/display`, `/kiosk`, and their data APIs with `?token=...` appended. Generate or remove it under Settings, Hardware; registered displays get URLs with the token already in place. Rotating it invalidates the old one, so re-point your screens after.
+- The **connector token** authenticates the Claude Code connector's status reports, sent as an `X-Connector-Token` header. It is generated on demand and shown, inside the ready-made setup command, only to admins.
+
+Treat both like passwords for a single narrow job, and rotate the display token if a screen or its URL wanders off.
+
+## Backup and restore
+
+Settings, Backup and Restore downloads one JSON file holding every project, column, and card (subtasks are cards too, so they ride along). Restoring replaces all projects, columns, and cards with the file's contents, so it asks for confirmation; backups from older versions that carried a separate subtasks list import cleanly.
+
+Know what the JSON does **not** contain: user accounts and passwords, settings (including AI keys, the app title, and both device tokens), API keys, attachment files, and each card's comment and activity trail. The JSON is great for moving boards between instances or keeping a second copy of the work itself. For a complete backup, copy the whole data folder: `tracker.db`, `settings.json`, `secret_key`, and `attachments/` together are the entire instance.
+
+## Security notes
+
+- **Open until the first user.** With no users, SQ trusts the network completely, which suits a home LAN. Do not expose an open instance to the internet; add users first, and even then prefer keeping SQ on the LAN or behind your own access controls.
+- **What locks when users exist.** Everything requires a session, an API key, or a device token, except the login page, the health check, static assets, and the display pages with a valid token.
+- **What tokens can and cannot do.** The display token reads the Today list and can toggle a task done from the kiosk; that is its entire reach, with no access to boards, settings, or the rest of the API. The connector token can only post Claude Code status snapshots. API keys act as member or viewer, never admin, so they cannot touch users, settings, keys, display configuration, or backups. A leaked device credential is an annoyance, not a takeover.
+- **Passwords and sessions.** The 4-character minimum is a floor for a household; use longer passwords for anything more exposed. Sessions are signed with a key stored at `data/secret_key` (overridable with `TRACKER_SECRET_KEY`), so guard the data folder like the credential store it is.

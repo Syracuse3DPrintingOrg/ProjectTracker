@@ -1,5 +1,7 @@
 # SQ &#128063;
 
+**[Documentation](https://syracuse3dprintingorg.github.io/ProjectTracker/)**
+
 **SQ** (short for Squirrel) is a lightweight, self-hosted project tracker
 for people with seventeen projects and one attention span. Drag-and-drop
 cards on a kanban board, a Today's Tasks list, wall displays, and a

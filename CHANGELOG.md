@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-07-23
+
+### Added
+
+- **SQ has a manual now.** Full documentation lives at
+  syracuse3dprintingorg.github.io/ProjectTracker: getting started,
+  boards, Today and wall displays, attachments and previews, AI
+  features, integrations, and administration. The Updates pane and the
+  README link straight to it.
+
 ## [0.14.1] - 2026-07-22
 
 ### Fixed
