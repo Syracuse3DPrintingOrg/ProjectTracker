@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from ..services import card_events, checklist, store
+from ..services import card_events, checklist, notifications, store
 
 router = APIRouter(prefix="/api", tags=["boards"])
 
@@ -11,6 +11,13 @@ router = APIRouter(prefix="/api", tags=["boards"])
 def actor(request: Request) -> str:
     user = getattr(request.state, "user", None)
     return user["username"] if user else "someone"
+
+
+def actor_id(request: Request) -> int | None:
+    """The acting user's id; None for anonymous callers and API keys.
+    Used to keep people from being notified about their own actions."""
+    user = getattr(request.state, "user", None)
+    return user.get("id") if user else None
 
 
 def list_owner(request: Request, chosen: str) -> int | None:
@@ -68,6 +75,7 @@ class CardUpdate(BaseModel):
     clear_assignee: bool = False
     parent_id: int | None = None
     clear_parent: bool = False
+    archived: bool | None = None
 
 
 class SubtaskIn(BaseModel):
@@ -147,6 +155,15 @@ def archive_project(project_id: int, archived: bool = True):
         raise HTTPException(404)
     store.archive_project(project_id, archived)
     return store.get_project(project_id)
+
+
+@router.post("/projects/{project_id}/archive-done")
+def archive_done(project_id: int):
+    """Sweep finished cards (and their subtasks) into the project's
+    archive. They stay on the overview's Archived list, off the board."""
+    if not store.get_project(project_id):
+        raise HTTPException(404)
+    return {"archived": store.archive_done_cards(project_id)}
 
 
 @router.delete("/projects/{project_id}", status_code=204)
@@ -232,6 +249,9 @@ def update_card(card_id: int, body: CardUpdate, request: Request):
     if not card:
         raise HTTPException(404)
     updates = body.model_dump(exclude_unset=True)
+    archived = updates.pop("archived", None)
+    if archived is not None:
+        store.set_card_archived(card_id, archived)
     clear_parent = updates.pop("clear_parent", False)
     new_parent = updates.pop("parent_id", None)
     if new_parent is not None:
@@ -264,6 +284,12 @@ def update_card(card_id: int, body: CardUpdate, request: Request):
             card_events.log(
                 card_id, actor(request), "assigned", f"to {target['username']}"
             )
+            if target["id"] != actor_id(request):
+                notifications.notify(
+                    target["id"],
+                    f"{actor(request)} assigned you: {card['title']}",
+                    f"/project/{card['project_id']}",
+                )
     elif clear and card["assignee_id"]:
         card_events.log(card_id, actor(request), "assigned", "to nobody")
     return store.update_card(card_id, **updates)
@@ -346,9 +372,24 @@ def list_events(card_id: int):
 
 @router.post("/cards/{card_id}/comments", status_code=201)
 def add_comment(card_id: int, body: CommentIn, request: Request):
-    if not store.get_card(card_id):
+    card = store.get_card(card_id)
+    if not card:
         raise HTTPException(404)
-    card_events.log(card_id, actor(request), "comment", body.text.strip())
+    text = body.text.strip()
+    card_events.log(card_id, actor(request), "comment", text)
+    # Notify the assignee plus everyone @mentioned, once each, never
+    # the commenter about their own comment.
+    targets: list[int] = []
+    if card["assignee_id"]:
+        targets.append(card["assignee_id"])
+    for uid in notifications.mention_targets(text):
+        if uid not in targets:
+            targets.append(uid)
+    message = f"{actor(request)} commented on {card['title']}: {text[:80]}"
+    me = actor_id(request)
+    for uid in targets:
+        if uid != me:
+            notifications.notify(uid, message, f"/project/{card['project_id']}")
     return card_events.list_for_card(card_id)[-1]
 
 
@@ -457,6 +498,18 @@ def import_data(body: ImportIn):
          "cards": body.cards, "subtasks": body.subtasks}
     )
     return {"ok": True, **counts}
+
+
+@router.post("/import/trello")
+def import_trello_board(body: dict):
+    """Bring a Trello board export in as a new project. Additive: nothing
+    already in the tracker is replaced."""
+    from ..services import trello_import
+
+    try:
+        return trello_import.import_trello(body)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
 
 
 @router.post("/cards/{card_id}/today")

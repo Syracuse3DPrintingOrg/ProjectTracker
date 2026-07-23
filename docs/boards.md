@@ -92,3 +92,18 @@ The filter box at the top right of the board narrows cards as you type, matching
 The **Overview** button on a board opens the project's overview: a description you can edit in place, headline counts (open tasks, finished, files, days quiet), the open tasks with their status, owner, due date, and subtask progress, the finished work tucked into a collapsible list, every file attached anywhere in the project (click one to preview it), and the recent activity across all its cards.
 
 It is the page to send someone who asks "so how is that project going," assuming you are brave enough to look yourself.
+
+
+## My work
+
+The My work entry in the top menu gathers every open card assigned to
+you across all active projects, grouped by project and sorted by due
+date and priority. It is the "what should I be doing" page; the Today
+list stays the "what am I doing today" page.
+
+## Reports
+
+Every project overview includes a Reports panel: bars for how many
+cards you finished each of the last eight weeks, the average age of
+what is still open, and a live count per column. No sprint ceremonies
+required.

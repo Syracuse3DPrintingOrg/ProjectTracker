@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-07-23
+
+### Added
+
+- **Notifications.** Assign someone a card, mention them with @username
+  in a comment, or comment on their card and they hear about it: a bell
+  in the top bar collects it all, and your account page takes an ntfy
+  topic or webhook URL if you want a ping on your phone. Nobody is
+  notified about their own actions; the squirrel is not that annoying.
+- **My work.** One page with every open card assigned to you across all
+  projects, grouped and sorted by what is due first.
+- **Reports.** Project overviews now show finished-per-week bars for the
+  last eight weeks, how old your open cards are on average, and live
+  per-column counts.
+- **Import from Trello.** Drop a Trello board export into Backup and
+  Restore and it becomes an SQ project: lists to columns, cards with
+  descriptions, labels, and due dates, checklists as subtasks. Closed
+  things stay closed in the past where they belong.
+- **Archive finished cards.** Sweep a board's done column into the
+  archive from the column menu or the project overview; archived cards
+  leave the board, Today, and search, but stay in the overview's
+  Archived list (and in backups) with one-click unarchive.
+- **How SQ compares.** The docs gained an honest page mapping SQ to
+  Trello and Jira: what matches, what SQ adds, and what it skips on
+  purpose.
+
 ## [0.14.2] - 2026-07-23
 
 ### Added

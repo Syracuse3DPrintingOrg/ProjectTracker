@@ -31,8 +31,9 @@ ADMIN_READ_PATHS = (
     "/api/settings",
 )
 
-# Writes any signed-in user may make (self-service).
-SELF_SERVICE_PREFIXES = ("/api/account",)
+# Writes any signed-in user may make (self-service). Notifications are
+# always the caller's own rows, so a viewer may clear their inbox.
+SELF_SERVICE_PREFIXES = ("/api/account", "/api/notifications")
 
 
 import re

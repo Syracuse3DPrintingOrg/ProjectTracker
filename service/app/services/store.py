@@ -85,10 +85,10 @@ OVERVIEW_ACTIVITY_CAP = 30
 
 def project_overview(project_id: int) -> dict:
     """Everything the project overview page shows, in a handful of
-    queries: open work, finished work, the project's files, recent
-    activity, and the headline counts.
+    queries: open work, finished work, archived work, the project's
+    files, recent activity, and the headline counts.
 
-    Both card lists are top-level cards only; subtasks surface through
+    The card lists are top-level cards only; subtasks surface through
     their parent's progress numbers. Days quiet counts from the newest
     card update anywhere in the project, subtasks included."""
     card_select = (
@@ -102,14 +102,21 @@ def project_overview(project_id: int) -> dict:
     with database.connect() as conn:
         open_cards = _rows(
             conn.execute(
-                card_select + " AND columns.is_done = 0"
+                card_select + " AND cards.archived = 0 AND columns.is_done = 0"
                 " ORDER BY columns.position, columns.id, cards.position, cards.id",
                 (project_id,),
             )
         )
         done_cards = _rows(
             conn.execute(
-                card_select + " AND columns.is_done = 1"
+                card_select + " AND cards.archived = 0 AND columns.is_done = 1"
+                " ORDER BY cards.updated_at DESC, cards.id DESC LIMIT ?",
+                (project_id, OVERVIEW_DONE_CAP),
+            )
+        )
+        archived_cards = _rows(
+            conn.execute(
+                card_select + " AND cards.archived = 1"
                 " ORDER BY cards.updated_at DESC, cards.id DESC LIMIT ?",
                 (project_id, OVERVIEW_DONE_CAP),
             )
@@ -136,7 +143,10 @@ def project_overview(project_id: int) -> dict:
         )
         tallies = conn.execute(
             "SELECT COALESCE(SUM(CASE WHEN cards.parent_id IS NULL"
+            "   AND cards.archived = 0"
             "   AND columns.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_n,"
+            " COALESCE(SUM(CASE WHEN cards.parent_id IS NULL"
+            "   AND cards.archived = 1 THEN 1 ELSE 0 END), 0) AS archived_n,"
             " CAST(julianday('now') - julianday(COALESCE(MAX(cards.updated_at),"
             "   (SELECT created_at FROM projects WHERE id = ?)))"
             "   AS INTEGER) AS days_quiet"
@@ -156,11 +166,13 @@ def project_overview(project_id: int) -> dict:
     return {
         "open_cards": open_cards,
         "done_cards": done_cards,
+        "archived_cards": archived_cards,
         "files": files,
         "activity": activity,
         "counts": {
             "open": len(open_cards),
             "done": tallies["done_n"],
+            "archived": tallies["archived_n"],
             "files": file_count,
             "days_quiet": tallies["days_quiet"] or 0,
         },
@@ -180,6 +192,7 @@ def nudge_data(exclude_project_id: int | None = None) -> list[dict]:
         "   projects.created_at)) AS INTEGER) AS days_quiet"
         " FROM projects"
         " LEFT JOIN cards ON cards.project_id = projects.id"
+        "   AND cards.archived = 0"
         "   AND cards.column_id IN (SELECT id FROM columns WHERE is_done = 0)"
         " WHERE projects.archived = 0 AND projects.status = 'active'"
     )
@@ -277,12 +290,87 @@ def plan_candidates(limit: int = 40, owner: int | None = None) -> list[dict]:
                 " JOIN projects ON projects.id = cards.project_id"
                 " JOIN columns ON columns.id = cards.column_id"
                 " WHERE projects.archived = 0 AND projects.status = 'active'"
-                f" AND columns.is_done = 0 AND {not_listed}"
+                f" AND columns.is_done = 0 AND cards.archived = 0 AND {not_listed}"
                 " ORDER BY CASE WHEN cards.due_date = '' THEN 1 ELSE 0 END,"
                 " cards.due_date, cards.priority, cards.id LIMIT ?",
                 args,
             )
         )
+
+
+def my_work(user_id: int) -> list[dict]:
+    """Open cards assigned to one user across active projects, due-date
+    first, then priority. Children count; they are real work."""
+    with database.connect() as conn:
+        return _rows(
+            conn.execute(
+                "SELECT cards.*, projects.name AS project_name,"
+                " columns.name AS column_name"
+                " FROM cards"
+                " JOIN projects ON projects.id = cards.project_id"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE projects.archived = 0 AND projects.status = 'active'"
+                " AND columns.is_done = 0 AND cards.archived = 0"
+                " AND cards.assignee_id = ?"
+                " ORDER BY CASE WHEN cards.due_date = '' THEN 1 ELSE 0 END,"
+                " cards.due_date, cards.priority, projects.position, cards.id",
+                (user_id,),
+            )
+        )
+
+
+def project_report(project_id: int, weeks: int = 8) -> dict:
+    """Throughput and aging for the overview's reports section.
+
+    Done-per-week buckets finished cards by when they last changed,
+    which is when they landed in a done column for almost every card;
+    an honest approximation that needs no history table."""
+    with database.connect() as conn:
+        per_week = {
+            r["week"]: r["n"]
+            for r in conn.execute(
+                "SELECT strftime('%Y-%W', cards.updated_at) AS week,"
+                " COUNT(*) AS n FROM cards"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE cards.project_id = ? AND columns.is_done = 1"
+                " AND cards.updated_at >= datetime('now', ?)"
+                " GROUP BY week",
+                (project_id, f"-{weeks * 7} days"),
+            )
+        }
+        weeks_out = []
+        for i in range(weeks - 1, -1, -1):
+            row = conn.execute(
+                "SELECT strftime('%Y-%W', datetime('now', ?)) AS wk,"
+                " strftime('%m/%d', datetime('now', ?, 'weekday 1', '-7 days')) AS label",
+                (f"-{i * 7} days", f"-{i * 7} days"),
+            ).fetchone()
+            weeks_out.append(
+                {"label": row["label"], "done": per_week.get(row["wk"], 0)}
+            )
+        avg_age = conn.execute(
+            "SELECT AVG(julianday('now') - julianday(cards.created_at)) AS age"
+            " FROM cards JOIN columns ON columns.id = cards.column_id"
+            " WHERE cards.project_id = ? AND columns.is_done = 0",
+            (project_id,),
+        ).fetchone()["age"]
+        column_counts = _rows(
+            conn.execute(
+                "SELECT columns.name, columns.is_done, COUNT(cards.id) AS n"
+                " FROM columns LEFT JOIN cards ON cards.column_id = columns.id"
+                " AND cards.parent_id IS NULL"
+                " WHERE columns.project_id = ?"
+                " GROUP BY columns.id ORDER BY columns.position",
+                (project_id,),
+            )
+        )
+    peak = max((w["done"] for w in weeks_out), default=0)
+    return {
+        "weeks": weeks_out,
+        "peak": peak,
+        "avg_open_age_days": round(avg_age or 0),
+        "columns": column_counts,
+    }
 
 
 def due_lists(soon_days: int = 3) -> dict:
@@ -295,7 +383,7 @@ def due_lists(soon_days: int = 3) -> dict:
         " JOIN projects ON projects.id = cards.project_id"
         " JOIN columns ON columns.id = cards.column_id"
         " WHERE projects.archived = 0 AND projects.status = 'active'"
-        " AND columns.is_done = 0 AND cards.due_date != ''"
+        " AND columns.is_done = 0 AND cards.archived = 0 AND cards.due_date != ''"
         " AND cards.due_date <= date('now', 'localtime', ?)"
         " ORDER BY cards.due_date, cards.priority LIMIT 50"
     )
@@ -315,6 +403,7 @@ def overdue_count() -> int:
             " JOIN columns ON columns.id = cards.column_id"
             " JOIN projects ON projects.id = cards.project_id"
             " WHERE projects.archived = 0 AND columns.is_done = 0"
+            " AND cards.archived = 0"
             " AND cards.due_date != '' AND cards.due_date < date('now', 'localtime')"
         ).fetchone()[0]
 
@@ -328,6 +417,7 @@ def project_open_counts() -> list[dict]:
                 " COUNT(cards.id) AS open_cards"
                 " FROM projects"
                 " LEFT JOIN cards ON cards.project_id = projects.id"
+                "   AND cards.archived = 0"
                 "   AND cards.column_id IN"
                 "   (SELECT id FROM columns WHERE is_done = 0)"
                 " WHERE projects.archived = 0 AND projects.status = 'active'"
@@ -385,14 +475,13 @@ CARD_FIELDS = {
 }
 
 
-def list_cards(project_id: int) -> list[dict]:
+def list_cards(project_id: int, include_archived: bool = False) -> list[dict]:
     with database.connect() as conn:
-        return _rows(
-            conn.execute(
-                "SELECT * FROM cards WHERE project_id = ? ORDER BY position, id",
-                (project_id,),
-            )
-        )
+        q = "SELECT * FROM cards WHERE project_id = ?"
+        if not include_archived:
+            q += " AND archived = 0"
+        q += " ORDER BY position, id"
+        return _rows(conn.execute(q, (project_id,)))
 
 
 def get_card(card_id: int) -> dict | None:
@@ -587,7 +676,7 @@ def search_cards(query: str, project_id: int | None = None, limit: int = 50) -> 
         " FROM cards"
         " JOIN projects ON projects.id = cards.project_id"
         " JOIN columns ON columns.id = cards.column_id"
-        " WHERE projects.archived = 0"
+        " WHERE projects.archived = 0 AND cards.archived = 0"
         " AND (cards.title LIKE ? OR cards.description LIKE ? OR cards.labels LIKE ?)"
     )
     args: list = [like, like, like]
@@ -598,6 +687,48 @@ def search_cards(query: str, project_id: int | None = None, limit: int = 50) -> 
     args.append(limit)
     with database.connect() as conn:
         return _rows(conn.execute(sql, args))
+
+
+# ---- the archive ----
+#
+# Archived cards keep their row, their column, and their history; they
+# just stop appearing anywhere except the project overview's Archived
+# list and backups. Nothing here deletes anything.
+
+def archive_done_cards(project_id: int) -> int:
+    """Sweep the project's finished work into the archive: every
+    top-level card sitting in a done column, plus each one's subtasks
+    wherever those sit. Returns how many cards were archived."""
+    with database.connect() as conn:
+        tops = [
+            r["id"]
+            for r in conn.execute(
+                "SELECT cards.id FROM cards"
+                " JOIN columns ON columns.id = cards.column_id"
+                " WHERE cards.project_id = ? AND cards.parent_id IS NULL"
+                " AND cards.archived = 0 AND columns.is_done = 1",
+                (project_id,),
+            )
+        ]
+        if not tops:
+            return 0
+        marks = ",".join("?" for _ in tops)
+        cur = conn.execute(
+            f"UPDATE cards SET archived = 1 WHERE archived = 0"
+            f" AND (id IN ({marks}) OR parent_id IN ({marks}))",
+            (*tops, *tops),
+        )
+        return cur.rowcount
+
+
+def set_card_archived(card_id: int, archived: bool) -> None:
+    """Archive or unarchive one card. A top-level card's subtasks travel
+    with it both ways, so a card never comes back missing its pieces."""
+    with database.connect() as conn:
+        conn.execute(
+            "UPDATE cards SET archived = ? WHERE id = ? OR parent_id = ?",
+            (1 if archived else 0, card_id, card_id),
+        )
 
 
 def export_data() -> dict:
@@ -646,13 +777,14 @@ def import_data(data: dict) -> dict:
             conn.execute(
                 "INSERT INTO cards (id, project_id, column_id, title, description,"
                 " labels, priority, due_date, today, today_position, recur_days,"
-                " assignee_id, parent_id, position, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
+                " assignee_id, parent_id, archived, position, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,"
                 " COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))",
                 (c.get("id"), c["project_id"], c["column_id"], c.get("title", ""),
                  c.get("description", ""), c.get("labels", ""), c.get("priority", 2),
                  c.get("due_date", ""), c.get("today", 0), c.get("today_position", 0),
                  c.get("recur_days", 0), c.get("assignee_id"), c.get("parent_id"),
+                 c.get("archived", 0),
                  c.get("position", 0), c.get("created_at"), c.get("updated_at")),
             )
         done_columns: dict[int, int | None] = {}
@@ -706,7 +838,8 @@ def list_due_cards(
         " FROM cards"
         " JOIN projects ON projects.id = cards.project_id"
         " JOIN columns ON columns.id = cards.column_id"
-        " WHERE projects.archived = 0 AND cards.due_date != ''"
+        " WHERE projects.archived = 0 AND cards.archived = 0"
+        " AND cards.due_date != ''"
         " AND cards.due_date >= ? AND cards.due_date <= ?"
     )
     args: list = [start, end]
@@ -733,7 +866,8 @@ def _child_rows(conn, parent_id: int) -> list[dict]:
         conn.execute(
             "SELECT cards.*, columns.is_done AS done FROM cards"
             " JOIN columns ON columns.id = cards.column_id"
-            " WHERE cards.parent_id = ? ORDER BY cards.position, cards.id",
+            " WHERE cards.parent_id = ? AND cards.archived = 0"
+            " ORDER BY cards.position, cards.id",
             (parent_id,),
         )
     )
@@ -768,6 +902,7 @@ def children_map(project_id: int) -> dict[int, list[dict]]:
                 "SELECT cards.*, columns.is_done AS done FROM cards"
                 " JOIN columns ON columns.id = cards.column_id"
                 " WHERE cards.project_id = ? AND cards.parent_id IS NOT NULL"
+                " AND cards.archived = 0"
                 " ORDER BY cards.position, cards.id",
                 (project_id,),
             )
@@ -944,6 +1079,7 @@ def subtask_progress(project_id: int) -> dict[int, tuple[int, int]]:
                 " COUNT(*) AS total_n FROM cards"
                 " JOIN columns ON columns.id = cards.column_id"
                 " WHERE cards.project_id = ? AND cards.parent_id IS NOT NULL"
+                " AND cards.archived = 0"
                 " GROUP BY cards.parent_id",
                 (project_id,),
             )
@@ -966,7 +1102,8 @@ def subtask_progress_for_cards(card_ids: list[int]) -> dict[int, tuple[int, int]
                 f"SELECT cards.parent_id, SUM(columns.is_done) AS d,"
                 f" COUNT(*) AS t FROM cards"
                 f" JOIN columns ON columns.id = cards.column_id"
-                f" WHERE cards.parent_id IN ({marks}) GROUP BY cards.parent_id",
+                f" WHERE cards.parent_id IN ({marks}) AND cards.archived = 0"
+                f" GROUP BY cards.parent_id",
                 card_ids,
             )
         }
@@ -995,14 +1132,14 @@ def list_today(owner: int | None = None) -> list[dict]:
         if owner is None:
             return _rows(
                 conn.execute(
-                    select + " WHERE cards.today = 1"
+                    select + " WHERE cards.today = 1 AND cards.archived = 0"
                     " ORDER BY cards.today_position, cards.id"
                 )
             )
         return _rows(
             conn.execute(
                 select + " JOIN user_today ON user_today.card_id = cards.id"
-                " WHERE user_today.user_id = ?"
+                " WHERE user_today.user_id = ? AND cards.archived = 0"
                 " ORDER BY user_today.position, cards.id",
                 (owner,),
             )

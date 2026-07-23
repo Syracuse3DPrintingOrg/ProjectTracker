@@ -24,6 +24,24 @@
       <span class="assist-note" id="password-note"></span>
     </div>
   </form>
+
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Push notifications</h2>
+  <p class="muted">
+    Your notifications always land under the bell in the nav. To get them
+    on your phone too, use <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy</a>:
+    run your own server or use ntfy.sh, subscribe to a topic in the ntfy
+    app, and put the topic URL here (like https://ntfy.sh/your-topic).
+    SQ posts each notification to it the moment it happens.
+  </p>
+  <form id="webhook-form">
+    <label>Webhook URL <span class="muted">(leave blank to turn push off)</span></label>
+    <input name="webhook_url" type="url" placeholder="https://ntfy.sh/your-topic"
+           maxlength="500" value="{{ me.webhook_url or '' }}">
+    <div class="dialog-actions">
+      <button class="primary" type="submit">Save</button>
+      <span class="assist-note" id="webhook-note"></span>
+    </div>
+  </form>
 </div>
 
 <script>
@@ -52,6 +70,30 @@
         setTimeout(() => { window.location = "/login"; }, 1500);
       } catch (err) {
         note.textContent = "Change failed: " + err.message;
+      }
+    });
+
+    document.getElementById("webhook-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const note = document.getElementById("webhook-note");
+      note.textContent = "Saving...";
+      try {
+        const resp = await fetch("/api/account/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ webhook_url: f.webhook_url.value.trim() }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          note.textContent = data.detail || resp.statusText;
+          return;
+        }
+        note.textContent = f.webhook_url.value.trim()
+          ? "Saved. New notifications get pushed there."
+          : "Saved. Push is off; the bell still catches everything.";
+      } catch (err) {
+        note.textContent = "Save failed: " + err.message;
       }
     });
   })();

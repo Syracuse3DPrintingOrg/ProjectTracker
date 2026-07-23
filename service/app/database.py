@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS cards (
     recur_days INTEGER NOT NULL DEFAULT 0,
     assignee_id INTEGER,
     parent_id INTEGER,
+    archived INTEGER NOT NULL DEFAULT 0,
     position INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -53,8 +54,18 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'member',
     disabled INTEGER NOT NULL DEFAULT 0,
+    webhook_url TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    url TEXT NOT NULL DEFAULT '',
+    read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read, id);
 CREATE TABLE IF NOT EXISTS card_events (
     id INTEGER PRIMARY KEY,
     card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
@@ -129,6 +140,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE columns ADD COLUMN wip_limit INTEGER NOT NULL DEFAULT 0"
         )
+    user_cols = {r["name"] for r in conn.execute("PRAGMA table_info(users)")}
+    if "webhook_url" not in user_cols:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN webhook_url TEXT NOT NULL DEFAULT ''"
+        )
     card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)")}
     if "recur_days" not in card_cols:
         conn.execute(
@@ -141,6 +157,12 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # position is its order among siblings, not a column slot.
     if "parent_id" not in card_cols:
         conn.execute("ALTER TABLE cards ADD COLUMN parent_id INTEGER")
+    # Archived cards are finished work swept off the board; they only
+    # surface on the project overview's Archived list and in backups.
+    if "archived" not in card_cols:
+        conn.execute(
+            "ALTER TABLE cards ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+        )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)")
     _convert_legacy_subtasks(conn)
     # Personal Today lists arrived after 0.x installs shipped; the shared

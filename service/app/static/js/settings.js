@@ -401,6 +401,38 @@
     e.target.value = "";
   });
 
+  document.getElementById("trello-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    const note = document.getElementById("trello-note");
+    if (!file) return;
+    note.textContent = "Importing...";
+    try {
+      const data = JSON.parse(await file.text());
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("that file is not a Trello board export.");
+      }
+      const resp = await fetch("/api/import/trello", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!resp.ok) throw new Error((await resp.json()).detail || resp.statusText);
+      const result = await resp.json();
+      const c = result.counts;
+      note.textContent = "Imported " + result.project_name + ": " + c.lists +
+        " list" + (c.lists === 1 ? "" : "s") + ", " + c.cards +
+        " card" + (c.cards === 1 ? "" : "s") + ", " + c.subtasks +
+        " subtask" + (c.subtasks === 1 ? "" : "s") + ". ";
+      const link = document.createElement("a");
+      link.href = "/project/" + result.project_id;
+      link.textContent = "Open the board";
+      note.appendChild(link);
+    } catch (err) {
+      note.textContent = "Import failed: " + err.message;
+    }
+    e.target.value = "";
+  });
+
   document.getElementById("rotate-token").addEventListener("click", async () => {
     const data = await save({ rotate_display_token: true }, "token-note", "New token generated.");
     if (data) document.getElementById("display-token").textContent = data.display_token || "none";

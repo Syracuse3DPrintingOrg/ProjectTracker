@@ -59,7 +59,11 @@
   </div>
 
   <div class="panel">
-    <h2>Completed tasks</h2>
+    <div class="panel-head-row">
+      <h2>Completed tasks</h2>
+      {% if can_edit %}<button type="button" id="archive-done" title="Sweep finished cards off the board into the Archived list below">Archive finished</button>{% endif %}
+      <span class="assist-note" id="archive-note"></span>
+    </div>
     {% if done_cards %}
     <details class="overview-done">
       <summary>{{ counts.done }} finished task{{ "" if counts.done == 1 else "s" }}{% if counts.done > done_cards | length %} (showing the latest {{ done_cards | length }}){% endif %}</summary>
@@ -81,6 +85,29 @@
   </div>
 
   <div class="panel">
+    <h2>Archived</h2>
+    {% if archived_cards %}
+    <details class="overview-done">
+      <summary>{{ counts.archived }} archived task{{ "" if counts.archived == 1 else "s" }}{% if counts.archived > archived_cards | length %} (showing the latest {{ archived_cards | length }}){% endif %}</summary>
+      <ul class="overview-rows">
+        {% for card in archived_cards %}
+        <li>
+          <div class="overview-row done-row">
+            <span class="row-title">{{ card.title }}</span>
+            <span class="chip">{{ card.column_name }}</span>
+            <span class="muted">{{ card.updated_at[:10] }}</span>
+            {% if can_edit %}<button type="button" class="unarchive-btn" data-card-id="{{ card.id }}">Unarchive</button>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% else %}
+    <p class="muted">Nothing archived. Archive finished sweeps completed cards here, off the board.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
     <h2>Files</h2>
     {% if files %}
     <div class="overview-files">
@@ -95,6 +122,36 @@
     {% else %}
     <p class="muted">No files yet. Drop them onto a card on the board.</p>
     {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Reports</h2>
+    <div class="report-grid">
+      <div>
+        <h3 class="report-title">Finished per week</h3>
+        <div class="week-bars">
+          {% for w in report.weeks %}
+          <div class="week-bar" title="{{ w.done }} finished the week of {{ w.label }}">
+            <div class="bar-fill" style="height: {{ (100 * w.done / report.peak) | round | int if report.peak else 0 }}%"></div>
+            <div class="bar-count">{{ w.done if w.done }}</div>
+            <div class="bar-label">{{ w.label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <h3 class="report-title">Right now</h3>
+        <p class="muted" style="margin: 0.2rem 0;">Open cards average
+          <strong>{{ report.avg_open_age_days }} day{{ "s" if report.avg_open_age_days != 1 }}</strong> old.</p>
+        <ul class="list-plain" style="margin: 0.4rem 0 0;">
+          {% for col in report.columns %}
+          <li style="border: none; padding: 0.15rem 0;">
+            <span class="chip {% if col.is_done %}check-full{% endif %}">{{ col.n }}</span> {{ col.name }}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
   </div>
 
   <div class="panel">

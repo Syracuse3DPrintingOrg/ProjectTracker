@@ -12,6 +12,44 @@
     });
   });
 
+  // Archiving: sweep finished cards into the Archived list, or bring
+  // one back. Both buttons only render for people who can edit.
+  const archiveNote = document.getElementById("archive-note");
+  const archiveBtn = document.getElementById("archive-done");
+  if (archiveBtn) {
+    archiveBtn.addEventListener("click", async () => {
+      archiveNote.textContent = "Archiving...";
+      try {
+        const resp = await fetch("/api/projects/" + cfg.projectId + "/archive-done", { method: "POST" });
+        if (!resp.ok) throw new Error(resp.statusText);
+        const result = await resp.json();
+        if (!result.archived) {
+          archiveNote.textContent = "No finished cards to archive.";
+          return;
+        }
+        window.location.reload();
+      } catch (err) {
+        archiveNote.textContent = "Archive failed: " + err.message;
+      }
+    });
+  }
+
+  document.querySelectorAll(".unarchive-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        const resp = await fetch("/api/cards/" + btn.dataset.cardId, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived: false }),
+        });
+        if (!resp.ok) throw new Error(resp.statusText);
+        window.location.reload();
+      } catch (err) {
+        btn.textContent = "Failed: " + err.message;
+      }
+    });
+  });
+
   // Description editing. Viewers get no form; nothing below applies.
   const form = document.getElementById("desc-form");
   const view = document.getElementById("desc-view");

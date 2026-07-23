@@ -224,6 +224,19 @@
           </label>
           <span class="assist-note" id="backup-note"></span>
         </div>
+
+        <h2>Import from Trello</h2>
+        <p class="muted">Bring a Trello board over as a new project. In Trello, open the
+          board menu, choose Print and export, then Export as JSON, and upload that file
+          here. Lists become statuses, cards keep their descriptions, labels, and due
+          dates, checklist items become subtasks, and anything archived in Trello stays
+          behind. Your existing projects are not touched.</p>
+        <div class="dialog-actions">
+          <label class="btn" style="margin: 0;">Import from Trello
+            <input type="file" id="trello-file" accept="application/json" hidden>
+          </label>
+          <span class="assist-note" id="trello-note"></span>
+        </div>
       </div>
     </section>
 

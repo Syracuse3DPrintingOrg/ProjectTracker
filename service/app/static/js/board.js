@@ -1069,13 +1069,18 @@
       const col = btn.closest(".column");
       const columnId = col.dataset.columnId;
       const name = col.querySelector(".col-name").textContent;
+      const isDone = col.classList.contains("is-done");
+      const archiveHint = isDone ? ' "archive" to sweep finished cards into the project archive,' : "";
       const choice = prompt(
-        `Column "${name}"\nType a new name to rename, "done" to toggle the finished flag, "limit N" for a work-in-progress cap (0 removes it), or "delete" to remove (must be empty):`
+        `Column "${name}"\nType a new name to rename, "done" to toggle the finished flag, "limit N" for a work-in-progress cap (0 removes it),${archiveHint} or "delete" to remove (must be empty):`
       );
       if (!choice) return;
       const limitMatch = choice.trim().toLowerCase().match(/^limit\s+(\d{1,2})$/);
       try {
-        if (choice.trim().toLowerCase() === "delete") {
+        if (isDone && choice.trim().toLowerCase() === "archive") {
+          const result = await api(`/api/projects/${projectId}/archive-done`, { method: "POST" });
+          alert(`Archived ${result.archived} card${result.archived === 1 ? "" : "s"}. They live on in the project overview.`);
+        } else if (choice.trim().toLowerCase() === "delete") {
           await api(`/api/columns/${columnId}`, { method: "DELETE" });
         } else if (choice.trim().toLowerCase() === "done") {
           await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ is_done: !col.classList.contains("is-done") }) });

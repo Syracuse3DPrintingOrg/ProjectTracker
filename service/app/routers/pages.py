@@ -88,11 +88,13 @@ def project_overview_page(request: Request, project_id: int):
         return RedirectResponse("/", status_code=303)
     settings = config.load_settings()
     data = store.project_overview(project_id)
+    report = store.project_report(project_id)
     return templates.TemplateResponse(
         request,
         "project_overview.html",
         {
             **_page_context(settings, request),
+            "report": report,
             "project": project,
             "description_paragraphs": [
                 p.strip() for p in project["description"].splitlines() if p.strip()
@@ -113,6 +115,23 @@ def today_page(request: Request):
             "projects": store.list_projects(),
             "tasks": store.list_today(),
         },
+    )
+
+
+@router.get("/my")
+def my_work_page(request: Request):
+    me = getattr(request.state, "user", None)
+    if not me or me.get("id") is None:
+        return RedirectResponse("/", status_code=303)
+    settings = config.load_settings()
+    cards = store.my_work(me["id"])
+    grouped: dict = {}
+    for card in cards:
+        grouped.setdefault(card["project_name"], []).append(card)
+    return templates.TemplateResponse(
+        request,
+        "my.html",
+        {**_page_context(settings, request), "grouped": grouped, "total": len(cards)},
     )
 
 

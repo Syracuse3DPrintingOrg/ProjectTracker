@@ -24,6 +24,7 @@ nav:
   - AI features: ai-features.md
   - Integrations: integrations.md
   - Administration: administration.md
+  - How SQ compares: compared.md
 
 markdown_extensions:
   - admonition

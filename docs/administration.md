@@ -64,3 +64,17 @@ Know what the JSON does **not** contain: user accounts and passwords, settings (
 - **What locks when users exist.** Everything requires a session, an API key, or a device token, except the login page, the health check, static assets, and the display pages with a valid token.
 - **What tokens can and cannot do.** The display token reads the Today list and can toggle a task done from the kiosk; that is its entire reach, with no access to boards, settings, or the rest of the API. The connector token can only post Claude Code status snapshots. API keys act as member or viewer, never admin, so they cannot touch users, settings, keys, display configuration, or backups. A leaked device credential is an annoyance, not a takeover.
 - **Passwords and sessions.** The 4-character minimum is a floor for a household; use longer passwords for anything more exposed. Sessions are signed with a key stored at `data/secret_key` (overridable with `TRACKER_SECRET_KEY`), so guard the data folder like the credential store it is.
+
+
+## Notifications
+
+When someone assigns you a card, mentions you with @username in a
+comment, or comments on a card assigned to you, SQ drops a notification
+in the bell at the top of the page. Unread ones show as a badge; the
+dropdown marks them read as you click through.
+
+Want them on your phone? Put an [ntfy](https://ntfy.sh) topic URL (or
+any webhook receiver) in the Push notifications box on your account
+page. SQ posts each notification there as it happens: ntfy topics get
+the text directly, and URLs with "hook" in the path get JSON with text
+and url fields. Self-hosted ntfy works exactly the same way.

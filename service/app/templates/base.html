@@ -15,6 +15,7 @@
   <div class="nav-pills">
     <a class="pill" href="/">Boards</a>
     <a class="pill" href="/today">Today</a>
+    {% if user %}<a class="pill" href="/my">My work</a>{% endif %}
     <a class="pill" href="/calendar">Calendar</a>
     <a class="pill" href="/dashboard/claude-code">Claude Code</a>
     {% if is_admin or not auth_required %}<a class="pill" href="/settings#hardware">Displays</a>{% endif %}
@@ -23,6 +24,18 @@
     {% block nav %}{% endblock %}
     <a href="#" id="kiosk-toggle" title="Kiosk mode: this device becomes a Today dashboard">Kiosk</a>
     <a href="/search" title="Search">&#128269;</a>
+    {% if user %}
+    <span class="notify-wrap">
+      <a href="#" id="notify-bell" title="Notifications" aria-label="Notifications">&#128276;<span id="notify-badge" class="notify-badge" hidden></span></a>
+      <div id="notify-panel" class="notify-panel" hidden>
+        <div class="notify-head">
+          <span>Notifications</span>
+          <a href="#" id="notify-mark-read">Mark all read</a>
+        </div>
+        <div id="notify-list" class="notify-list"></div>
+      </div>
+    </span>
+    {% endif %}
     {% if user %}<a href="/account" class="muted" title="Your account">{{ user.username }} &middot; {{ user.role }}</a>{% endif %}
     {% if is_admin or not auth_required %}<a href="/settings">Settings</a>{% endif %}
     {% if auth_required %}<a href="/logout">Log out</a>{% endif %}
@@ -58,6 +71,7 @@
 {% block content %}{% endblock %}
 </main>
 <footer class="footer">{{ app_title }} v{{ version }} &middot; easily distracted, reliably tracked &#128063;</footer>
+{% if user %}<script src="/static/js/notifications.js" defer></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

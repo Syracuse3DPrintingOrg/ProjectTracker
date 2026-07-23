@@ -16,6 +16,7 @@ from .routers import (
     displays_router,
     integrations_router,
     llm_router,
+    notifications_router,
     pages,
     settings_router,
     users_router,
@@ -102,6 +103,7 @@ app.include_router(display.router)
 app.include_router(displays_router.router)
 app.include_router(connectors_router.router)
 app.include_router(users_router.router)
+app.include_router(notifications_router.router)
 app.include_router(integrations_router.router)
 app.include_router(attachments_router.router)
 app.include_router(llm_router.router)

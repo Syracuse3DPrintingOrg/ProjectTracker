@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from ..services import users
+from ..services import notifications, users
 from .pages import _page_context, templates
 
 router = APIRouter(tags=["users"])
@@ -25,6 +25,10 @@ class UserUpdate(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
+
+
+class WebhookIn(BaseModel):
+    webhook_url: str = ""
 
 
 @router.get("/api/users")
@@ -77,6 +81,20 @@ def change_password(body: PasswordChange, request: Request):
     # The password change invalidates every session, including this one;
     # the client should send the user to the login page.
     return {"ok": True, "relogin": True}
+
+
+@router.post("/api/account/webhook")
+def set_webhook(body: WebhookIn, request: Request):
+    me = getattr(request.state, "user", None)
+    if not me or not me.get("id"):
+        raise HTTPException(401)
+    url = body.webhook_url.strip()
+    if len(url) > 500:
+        raise HTTPException(422, "that URL is too long")
+    if url and not url.startswith(("http://", "https://")):
+        raise HTTPException(422, "the webhook URL must start with http:// or https://")
+    notifications.set_webhook(me["id"], url)
+    return {"ok": True, "webhook_url": url}
 
 
 @router.get("/account")

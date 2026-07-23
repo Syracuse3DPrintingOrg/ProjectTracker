@@ -87,7 +87,9 @@ def test_project_overview_store_shape(client):
     kinds = {e["kind"] for e in data["activity"]}
     assert {"comment", "created", "moved", "attached"} <= kinds
 
-    assert data["counts"] == {"open": 1, "done": 1, "files": 1, "days_quiet": 0}
+    assert data["counts"] == {
+        "open": 1, "done": 1, "archived": 0, "files": 1, "days_quiet": 0,
+    }
 
 
 def test_overview_assignee_username(client):

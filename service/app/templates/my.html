@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}My work · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="board-header">
+  <h1 style="font-size: 1.15rem; margin: 0;">My work</h1>
+  <span class="muted">{{ total }} open card{{ "s" if total != 1 }} assigned to you</span>
+</div>
+
+{% if not grouped %}
+<div class="panel">
+  <p class="muted">Nothing is assigned to you right now. The squirrel is
+    either impressed or suspicious.</p>
+</div>
+{% endif %}
+
+{% for project_name, cards in grouped.items() %}
+<div class="panel" style="margin-bottom: 0.8rem;">
+  <h2 style="font-size: 1rem; margin-top: 0;">{{ project_name }}</h2>
+  <ul class="overview-rows">
+    {% for card in cards %}
+    <li>
+      <a class="overview-row" href="/project/{{ card.project_id }}">
+        <span class="row-title">{{ card.title }}</span>
+        {% if card.priority != 2 %}<span class="chip p{{ card.priority }}">P{{ card.priority }}</span>{% endif %}
+        {% if card.due_date %}<span class="chip due">due {{ card.due_date }}</span>{% endif %}
+        <span class="chip">{{ card.column_name }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+{% endblock %}
