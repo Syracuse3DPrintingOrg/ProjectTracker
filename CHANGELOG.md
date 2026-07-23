@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-23
+
+### Added
+
+- **Simple lists.** Not everything is a project. Create a simple list
+  (from the welcome page or a right-click on any board) and you get a
+  plain checklist: type, press Enter, tick things off, checked items
+  sink to the bottom, and Clear checked sweeps them away. Under the
+  hood list items are ordinary cards, so a shopping list item can still
+  go on the Today list, show on the kitchen wall display, and turn up
+  in search.
+- **Right-click everything.** The board grew real context menus:
+  right-click a card for open, Today, assign, move, make subtask,
+  archive, send to AI, or delete; right-click a column for rename, WIP
+  limit, done toggle, archive finished, or delete; right-click empty
+  space to add cards and columns or start a new project or list. The
+  old column prompt is gone; the three-dot button opens the same menu.
+  Long-press works on touch screens.
+
 ## [0.15.0] - 2026-07-23
 
 ### Added

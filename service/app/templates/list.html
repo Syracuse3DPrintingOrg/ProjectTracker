@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} · {{ app_title }}{% endblock %}
+{% block content %}
+<div class="board-header">
+  <select id="project-select">
+    {% for p in projects %}
+    <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>
+      {%- if p.kind == "list" %}&#9745; {% elif p.status == "buried" %}&#127793; {% elif p.status == "cracked" %}&#9989; {% endif %}{{ p.name }}</option>
+    {% endfor %}
+  </select>
+  <a class="btn" href="/project/{{ project.id }}/overview">Overview</a>
+  {% if can_edit %}
+  <button id="clear-checked">Clear checked</button>
+  <button id="delete-list" class="danger">Delete list</button>
+  {% endif %}
+</div>
+
+<div class="simple-list panel">
+  {% if can_edit %}
+  <form id="list-add" autocomplete="off">
+    <input id="list-new" placeholder="Add an item and press Enter" maxlength="500" autofocus>
+  </form>
+  {% endif %}
+
+  <ul class="list-items" id="list-unchecked" data-column-id="{{ items_column.id }}">
+    {% for card in unchecked %}
+    <li class="list-item" data-card-id="{{ card.id }}">
+      <input type="checkbox" {% if not can_edit %}disabled{% endif %}>
+      <span class="item-title">{{ card.title }}</span>
+      {% if card.id in today_ids %}<span class="chip" title="On the Today list">&#9728;&#65039;</span>{% endif %}
+      {% if can_edit %}<button class="item-delete" title="Remove">&times;</button>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if not unchecked and not checked %}
+  <p class="muted" id="list-empty">Nothing here yet. Add the first thing you
+    would otherwise forget.</p>
+  {% endif %}
+
+  {% if checked %}
+  <div class="checked-divider muted">{{ checked | length }} checked</div>
+  {% endif %}
+  <ul class="list-items checked" id="list-checked">
+    {% for card in checked %}
+    <li class="list-item done" data-card-id="{{ card.id }}">
+      <input type="checkbox" checked {% if not can_edit %}disabled{% endif %}>
+      <span class="item-title">{{ card.title }}</span>
+      {% if can_edit %}<button class="item-delete" title="Remove">&times;</button>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+<script>
+  window.LIST = {
+    projectId: {{ project.id }},
+    itemsColumnId: {{ items_column.id }},
+    canEdit: {{ 'true' if can_edit else 'false' }}
+  };
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/vendor/Sortable.min.js"></script>
+<script src="/static/js/simple-list.js"></script>
+{% endblock %}

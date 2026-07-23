@@ -10,7 +10,7 @@ import os
 import threading
 from pathlib import Path
 
-APP_VERSION = "0.15.0"
+APP_VERSION = "0.16.0"
 APP_NAME = "SQ"
 APP_TAGLINE = "the project tracker for the easily distracted"
 

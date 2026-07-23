@@ -5,7 +5,7 @@
   <select id="project-select">
     {% for p in projects %}
     <option value="{{ p.id }}" {% if p.id == project.id %}selected{% endif %}>
-      {%- if p.status == "buried" %}&#127793; {% elif p.status == "cracked" %}&#9989; {% endif %}{{ p.name }}</option>
+      {%- if p.kind == "list" %}&#9745; {% elif p.status == "buried" %}&#127793; {% elif p.status == "cracked" %}&#9989; {% endif %}{{ p.name }}</option>
     {% endfor %}
   </select>
   <select id="project-status" class="status-chip" title="Project status">
@@ -220,5 +220,6 @@
 <script src="/static/js/vendor/Sortable.min.js"></script>
 <script src="/static/js/stl-viewer.js"></script>
 <script src="/static/js/preview.js"></script>
+<script src="/static/js/contextmenu.js"></script>
 <script src="/static/js/board.js"></script>
 {% endblock %}

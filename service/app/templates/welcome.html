@@ -10,7 +10,8 @@
     <label>Project name</label>
     <input name="name" required maxlength="200" autocomplete="off" autofocus>
     <div class="dialog-actions">
-      <button class="primary" type="submit">Create project</button>
+      <button class="primary" type="submit">Create a board</button>
+      <button type="button" id="first-list">Create a simple list</button>
     </div>
   </form>
 </div>
@@ -29,6 +30,20 @@
       window.location.href = `/project/${p.id}`;
     } else {
       alert("Could not create the project.");
+    }
+  });
+  document.getElementById("first-list").addEventListener("click", async () => {
+    const name = document.querySelector("#first-project input[name=name]").value.trim() || "Shopping";
+    const resp = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, kind: "list" }),
+    });
+    if (resp.ok) {
+      const p = await resp.json();
+      window.location.href = `/project/${p.id}`;
+    } else {
+      alert("Could not create the list.");
     }
   });
 </script>

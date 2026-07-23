@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS projects (
     claude_path TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active',
     description TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'board',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS columns (
@@ -134,6 +135,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if "description" not in project_cols:
         conn.execute(
             "ALTER TABLE projects ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+        )
+    if "kind" not in project_cols:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'board'"
         )
     column_cols = {r["name"] for r in conn.execute("PRAGMA table_info(columns)")}
     if "wip_limit" not in column_cols:

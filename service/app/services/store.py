@@ -37,14 +37,25 @@ def get_project(project_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-def create_project(name: str, columns: list[str] | None = None) -> dict:
-    columns = columns or DEFAULT_COLUMNS
+PROJECT_KINDS = ("board", "list")
+
+# A simple list wants no kanban ceremony: one working column, one done.
+LIST_COLUMNS = ["Items", "Done"]
+
+
+def create_project(
+    name: str, columns: list[str] | None = None, kind: str = "board"
+) -> dict:
+    if kind not in PROJECT_KINDS:
+        raise ValueError(f"unknown project kind: {kind}")
+    columns = columns or (LIST_COLUMNS if kind == "list" else DEFAULT_COLUMNS)
     with database.connect() as conn:
         pos = conn.execute(
             "SELECT COALESCE(MAX(position), -1) + 1 FROM projects"
         ).fetchone()[0]
         cur = conn.execute(
-            "INSERT INTO projects (name, position) VALUES (?, ?)", (name, pos)
+            "INSERT INTO projects (name, position, kind) VALUES (?, ?, ?)",
+            (name, pos, kind),
         )
         project_id = cur.lastrowid
         for i, col in enumerate(columns):

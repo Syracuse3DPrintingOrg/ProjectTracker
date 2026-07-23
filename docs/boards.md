@@ -107,3 +107,21 @@ Every project overview includes a Reports panel: bars for how many
 cards you finished each of the last eight weeks, the average age of
 what is still open, and a live count per column. No sprint ceremonies
 required.
+
+
+## Simple lists
+
+Some things are a shopping list, not a project. When you create a
+project you can pick a simple list instead of a board: one flat page
+with an add box at the top, tickable rows, checked items sinking below,
+and a Clear checked button. List items are real cards underneath, so
+you can still drag one onto Today, see it on a wall display, and find
+it in search. The project switcher marks lists with a checkbox icon.
+
+## Right-click menus
+
+The board speaks right-click. Cards offer open, Today, assign, move,
+make subtask of, archive, send to AI, and delete; column headers offer
+rename, WIP limit, the done-column toggle, archive finished, and
+delete; empty board space offers new cards, columns, projects, and
+lists. On a touch screen, long-press does the same thing.

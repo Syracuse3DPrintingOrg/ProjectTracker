@@ -47,6 +47,26 @@ def project_board(request: Request, project_id: int):
     if not project:
         return RedirectResponse("/", status_code=303)
     settings = config.load_settings()
+    if project.get("kind") == "list":
+        columns = store.list_columns(project_id)
+        working = [c for c in columns if not c["is_done"]]
+        done = [c for c in columns if c["is_done"]]
+        cards = [c for c in store.list_cards(project_id) if c["parent_id"] is None]
+        done_ids = {c["id"] for c in done}
+        return templates.TemplateResponse(
+            request,
+            "list.html",
+            {
+                **_page_context(settings, request),
+                "project": project,
+                "projects": store.list_projects(),
+                "items_column": working[0] if working else columns[0],
+                "done_column_ids": list(done_ids),
+                "unchecked": [c for c in cards if c["column_id"] not in done_ids],
+                "checked": [c for c in cards if c["column_id"] in done_ids],
+                "today_ids": [c["id"] for c in store.list_today()],
+            },
+        )
     from ..services import connectors
 
     claude_status = (

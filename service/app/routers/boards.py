@@ -34,6 +34,7 @@ def list_owner(request: Request, chosen: str) -> int | None:
 
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    kind: str = "board"
 
 
 class ProjectUpdate(BaseModel):
@@ -125,7 +126,9 @@ def list_projects(include_archived: bool = False):
 
 @router.post("/projects", status_code=201)
 def create_project(body: ProjectIn):
-    return store.create_project(body.name.strip())
+    if body.kind not in store.PROJECT_KINDS:
+        raise HTTPException(422, f"kind must be one of {store.PROJECT_KINDS}")
+    return store.create_project(body.name.strip(), kind=body.kind)
 
 
 @router.patch("/projects/{project_id}")

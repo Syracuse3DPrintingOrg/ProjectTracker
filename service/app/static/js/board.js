@@ -1009,17 +1009,18 @@
   const handoffDialog = document.getElementById("handoff-dialog");
   let handoffPrompt = "";
 
-  document.getElementById("send-to-ai").addEventListener("click", async () => {
-    const id = form.card_id.value;
-    if (!id) return;
+  async function openHandoff(cardId) {
+    if (!cardId) return;
     try {
-      const data = await api(`/api/cards/${id}/handoff`);
+      const data = await api(`/api/cards/${cardId}/handoff`);
       handoffPrompt = data.prompt || "";
       document.getElementById("handoff-text").value = handoffPrompt;
       document.getElementById("handoff-note").textContent = "";
       handoffDialog.showModal();
     } catch (err) { alert(err.message); }
-  });
+  }
+
+  document.getElementById("send-to-ai").addEventListener("click", () => openHandoff(form.card_id.value));
 
   async function handoffCopy(text, doneNote) {
     const ok = await copyText(text, handoffDialog);
@@ -1054,43 +1055,74 @@
 
   /* ---- columns ---- */
 
-  document.getElementById("add-column").addEventListener("click", async () => {
+  async function addColumn() {
     const name = prompt("Status name:");
     if (!name || !name.trim()) return;
     try {
       await api(`/api/projects/${projectId}/columns`, { method: "POST", body: JSON.stringify({ name: name.trim() }) });
       window.location.reload();
     } catch (err) { alert(err.message); }
-  });
+  }
+
+  document.getElementById("add-column").addEventListener("click", addColumn);
+
+  /* The column menu: the same items whether it came from a right-click on
+     the header or a left-click on the header's own menu button. */
+  function openColumnMenu(x, y, col) {
+    const columnId = col.dataset.columnId;
+    const name = col.querySelector(".col-name").textContent;
+    const isDone = col.classList.contains("is-done");
+    const items = [
+      { label: "Rename", onclick: async () => {
+          const next = prompt("Column name:", name);
+          if (!next || !next.trim() || next.trim() === name) return;
+          try {
+            await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ name: next.trim() }) });
+            window.location.reload();
+          } catch (err) { alert(err.message); }
+        } },
+      { label: "WIP limit", onclick: async () => {
+          const current = parseInt(col.dataset.wip || "0", 10);
+          const raw = prompt("Work-in-progress limit (0 removes it):", String(current));
+          if (raw === null) return;
+          const n = parseInt(raw.trim(), 10);
+          if (isNaN(n) || n < 0 || n > 99) { alert("Enter a number from 0 to 99."); return; }
+          try {
+            await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ wip_limit: n }) });
+            window.location.reload();
+          } catch (err) { alert(err.message); }
+        } },
+      { label: isDone ? "Unmark as done column" : "Mark as done column", onclick: async () => {
+          try {
+            await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ is_done: !isDone }) });
+            window.location.reload();
+          } catch (err) { alert(err.message); }
+        } },
+    ];
+    if (isDone) {
+      items.push({ label: "Archive finished here", onclick: async () => {
+          try {
+            const result = await api(`/api/projects/${projectId}/archive-done`, { method: "POST" });
+            alert(`Archived ${result.archived} card${result.archived === 1 ? "" : "s"}. They live on in the project overview.`);
+            window.location.reload();
+          } catch (err) { alert(err.message); }
+        } });
+    }
+    items.push({ sep: true });
+    items.push({ label: "Delete column", danger: true, onclick: async () => {
+        try {
+          await api(`/api/columns/${columnId}`, { method: "DELETE" });
+          window.location.reload();
+        } catch (err) { alert(err.message); /* the 409 says the column still has cards */ }
+      } });
+    window.SQMenu.open(x, y, items);
+  }
 
   document.querySelectorAll(".col-menu").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const col = btn.closest(".column");
-      const columnId = col.dataset.columnId;
-      const name = col.querySelector(".col-name").textContent;
-      const isDone = col.classList.contains("is-done");
-      const archiveHint = isDone ? ' "archive" to sweep finished cards into the project archive,' : "";
-      const choice = prompt(
-        `Column "${name}"\nType a new name to rename, "done" to toggle the finished flag, "limit N" for a work-in-progress cap (0 removes it),${archiveHint} or "delete" to remove (must be empty):`
-      );
-      if (!choice) return;
-      const limitMatch = choice.trim().toLowerCase().match(/^limit\s+(\d{1,2})$/);
-      try {
-        if (isDone && choice.trim().toLowerCase() === "archive") {
-          const result = await api(`/api/projects/${projectId}/archive-done`, { method: "POST" });
-          alert(`Archived ${result.archived} card${result.archived === 1 ? "" : "s"}. They live on in the project overview.`);
-        } else if (choice.trim().toLowerCase() === "delete") {
-          await api(`/api/columns/${columnId}`, { method: "DELETE" });
-        } else if (choice.trim().toLowerCase() === "done") {
-          await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ is_done: !col.classList.contains("is-done") }) });
-        } else if (limitMatch) {
-          await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ wip_limit: parseInt(limitMatch[1], 10) }) });
-        } else {
-          await api(`/api/columns/${columnId}`, { method: "PATCH", body: JSON.stringify({ name: choice.trim() }) });
-        }
-        window.location.reload();
-      } catch (err) { alert(err.message); }
+      const r = btn.getBoundingClientRect();
+      openColumnMenu(r.left, r.bottom + 4, btn.closest(".column"));
     });
   });
 
@@ -1132,7 +1164,7 @@
     } catch (e) { /* no guilt today */ }
   }
 
-  document.getElementById("new-project").addEventListener("click", async () => {
+  async function newProject() {
     try {
       const unfinished = await api("/api/nudge");
       if (unfinished.length) {
@@ -1153,7 +1185,25 @@
       const p = await api("/api/projects", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
       window.location.href = `/project/${p.id}`;
     } catch (err) { alert(err.message); }
-  });
+  }
+
+  document.getElementById("new-project").addEventListener("click", newProject);
+
+  async function newList() {
+    const name = prompt("List name:");
+    if (!name || !name.trim()) return;
+    let p = null;
+    try {
+      p = await api("/api/projects", { method: "POST", body: JSON.stringify({ name: name.trim(), kind: "list" }) });
+    } catch (err) {
+      // A server without list projects yet rejects the kind field; a
+      // plain project is the next best thing.
+      try {
+        p = await api("/api/projects", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+      } catch (err2) { alert(err2.message); return; }
+    }
+    window.location.href = `/project/${p.id}`;
+  }
 
   document.getElementById("project-status").addEventListener("change", async (e) => {
     try {
@@ -1266,6 +1316,186 @@
       const hay = (el.dataset.title + " " + el.dataset.labels + " " + (el.dataset.assignee || "")).toLowerCase();
       el.style.display = !q || hay.includes(q) ? "" : "none";
     });
+  });
+
+  /* ---- right-click context menus ---- */
+
+  async function setCardToday(cardId, onIt, list) {
+    try {
+      await api(`/api/cards/${cardId}/today`, { method: "POST", body: JSON.stringify({ today: onIt, list: list }) });
+      await refreshToday();
+    } catch (err) { alert(err.message); }
+  }
+
+  async function assignCard(el, userId, username) {
+    const body = userId ? { assignee_id: userId } : { clear_assignee: true };
+    try {
+      await api(`/api/cards/${el.dataset.cardId}`, { method: "PATCH", body: JSON.stringify(body) });
+      el.dataset.assignee = username || "";
+      renderMeta(el);
+    } catch (err) { alert(err.message); }
+  }
+
+  async function moveCardTo(el, columnId) {
+    const cardId = el.dataset.cardId;
+    const target = document.querySelector(`#board .cards[data-column-id="${columnId}"]`);
+    try {
+      const moved = await api(`/api/cards/${cardId}/move`, {
+        method: "POST",
+        body: JSON.stringify({ column_id: columnId, position: target ? target.children.length : 0 }),
+      });
+      // A recurring card bounces out of Done server-side; redraw.
+      if (moved.column_id !== columnId) { window.location.reload(); return; }
+      if (target) target.appendChild(el);
+      updateCounts();
+      markToday();
+    } catch (err) { alert("Move failed: " + err.message); }
+  }
+
+  async function deleteCardFromBoard(el) {
+    const id = el.dataset.cardId;
+    if (!confirm("Delete this card? Its subtasks become cards of their own.")) return;
+    try {
+      await api(`/api/cards/${id}`, { method: "DELETE" });
+      if (hasKids(el)) {
+        // The subtasks were promoted to top-level cards; redraw the board.
+        window.location.reload();
+        return;
+      }
+      document.querySelectorAll(`.card[data-card-id="${id}"], .child-card[data-card-id="${id}"]`).forEach(n => n.remove());
+      updateCounts();
+      await refreshToday();
+    } catch (err) { alert(err.message); }
+  }
+
+  async function openCardMenu(x, y, el) {
+    const cardId = el.dataset.cardId;
+    const onToday = el.classList.contains("today");
+    const users = await loadAssignees();
+    const cardsBox = el.closest(".cards");
+    const currentColumnId = parseInt(cardsBox.dataset.columnId, 10);
+    const items = [];
+    items.push({ label: "Open", onclick: async () => {
+        try {
+          const card = await api(`/api/cards/${cardId}`);
+          openCardDialog(card, card.column_id);
+        } catch (err) { alert(err.message); }
+      } });
+    items.push({ sep: true });
+    items.push({
+      label: onToday ? "Remove from Today" : "Add to Today",
+      onclick: () => setCardToday(cardId, !onToday, todayList),
+    });
+    if (window.BOARD.userId && todayList !== "mine") {
+      items.push({ label: "Add to My Today", onclick: () => setCardToday(cardId, true, "mine") });
+    }
+    if (users.length) {
+      const children = users.map(u => ({ label: u.username, onclick: () => assignCard(el, u.id, u.username) }));
+      children.push({ sep: true });
+      children.push({ label: "Nobody", onclick: () => assignCard(el, null, "") });
+      items.push({ label: "Assign to", children: children });
+    }
+    const columns = [...document.querySelectorAll("#board .column")].map(col => ({
+      id: parseInt(col.dataset.columnId, 10),
+      name: col.querySelector(".col-name").textContent,
+    }));
+    items.push({
+      label: "Move to",
+      children: columns.map(c => ({
+        label: c.name,
+        disabled: c.id === currentColumnId,
+        onclick: () => moveCardTo(el, c.id),
+      })),
+    });
+    // A card with subtasks of its own cannot become a subtask.
+    if (!hasKids(el)) {
+      const peers = [...cardsBox.querySelectorAll(":scope > .card")].filter(p => p !== el).slice(0, 15);
+      if (peers.length) {
+        items.push({
+          label: "Make subtask of",
+          children: peers.map(p => ({
+            label: p.dataset.title,
+            onclick: () => nestCard(cardId, parseInt(p.dataset.cardId, 10)),
+          })),
+        });
+      }
+    }
+    items.push({ sep: true });
+    items.push({ label: "Archive", onclick: async () => {
+        try {
+          await api(`/api/cards/${cardId}`, { method: "PATCH", body: JSON.stringify({ archived: true }) });
+          window.location.reload();
+        } catch (err) { alert(err.message); }
+      } });
+    items.push({ label: "Send to AI", onclick: () => openHandoff(cardId) });
+    items.push({ sep: true });
+    items.push({ label: "Delete", danger: true, onclick: () => deleteCardFromBoard(el) });
+    window.SQMenu.open(x, y, items);
+  }
+
+  function openChildMenu(x, y, mini) {
+    const id = mini.dataset.cardId;
+    const parentId = parseInt(mini.closest(".child-list").dataset.parentId, 10);
+    window.SQMenu.open(x, y, [
+      { label: "Open", onclick: async () => {
+          try {
+            const child = await api(`/api/cards/${id}`);
+            openCardDialog(child, child.column_id);
+          } catch (err) { alert(err.message); }
+        } },
+      { label: "Promote to card", onclick: async () => {
+          try {
+            await api(`/api/cards/${id}`, { method: "PATCH", body: JSON.stringify({ clear_parent: true }) });
+          } catch (err) { alert("Promote failed: " + err.message); }
+          window.location.reload();
+        } },
+      { sep: true },
+      { label: "Delete", danger: true, onclick: async () => {
+          if (!confirm("Delete this subtask?")) return;
+          try {
+            await api(`/api/cards/${id}`, { method: "DELETE" });
+            await refreshSubtasks(parentId);
+          } catch (err) { alert(err.message); }
+        } },
+    ]);
+  }
+
+  function openBoardMenu(x, y, target) {
+    const near = target.closest(".column") || document.querySelector("#board .column");
+    window.SQMenu.open(x, y, [
+      { label: "Add card", disabled: !near, onclick: () => {
+          if (near) openCardDialog(null, parseInt(near.dataset.columnId, 10));
+        } },
+      { label: "Add status", onclick: addColumn },
+      { sep: true },
+      { label: "New project", onclick: newProject },
+      { label: "New list", onclick: newList },
+    ]);
+  }
+
+  boardEl.addEventListener("contextmenu", (e) => {
+    // Native menus survive where they matter: form fields and open dialogs.
+    if (e.target.closest("input, textarea, select, dialog[open]")) return;
+    const mini = e.target.closest(".child-card");
+    if (mini) {
+      e.preventDefault();
+      openChildMenu(e.clientX, e.clientY, mini);
+      return;
+    }
+    const cardBox = e.target.closest(".card");
+    if (cardBox) {
+      e.preventDefault();
+      openCardMenu(e.clientX, e.clientY, cardBox);
+      return;
+    }
+    const header = e.target.closest(".column-header");
+    if (header) {
+      e.preventDefault();
+      openColumnMenu(e.clientX, e.clientY, header.closest(".column"));
+      return;
+    }
+    e.preventDefault();
+    openBoardMenu(e.clientX, e.clientY, e.target);
   });
 
   /* ---- init ---- */
