@@ -84,34 +84,66 @@
 
   editBtn.addEventListener("click", () => showForm(true));
 
-  document.getElementById("desc-cancel").addEventListener("click", () => {
-    textarea.value = cfg.description || "";
-    note.textContent = "";
-    showForm(false);
+  // The description saves as you type; Done just saves anything still
+  // waiting and folds the editor away.
+  let saveTimer = null;
+  let saveChain = Promise.resolve();
+
+  async function persist(text) {
+    const resp = await fetch("/api/projects/" + cfg.projectId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: text }),
+    });
+    if (!resp.ok) {
+      let detail = resp.statusText;
+      try { detail = (await resp.json()).detail || detail; } catch (err) { /* keep statusText */ }
+      throw new Error(detail);
+    }
+    const project = await resp.json();
+    cfg.description = project.description || "";
+  }
+
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    const text = textarea.value;
+    if (text === (cfg.description || "")) return saveChain;
+    note.textContent = "Saving…";
+    saveChain = saveChain.catch(() => {}).then(() => persist(text)).then(() => {
+      if (textarea.value === text) note.textContent = "Saved";
+    }, (err) => {
+      note.textContent = "Save failed: " + err.message;
+      throw err;
+    });
+    return saveChain;
+  }
+
+  textarea.addEventListener("input", () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { save().catch(() => { /* shown in the note */ }); }, 800);
+  });
+  textarea.addEventListener("blur", () => { save().catch(() => { /* shown in the note */ }); });
+
+  window.addEventListener("pagehide", () => {
+    if (!saveTimer) return;
+    clearTimeout(saveTimer);
+    fetch("/api/projects/" + cfg.projectId, {
+      method: "PATCH",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: textarea.value }),
+    });
   });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    note.textContent = "Saving…";
     try {
-      const resp = await fetch("/api/projects/" + cfg.projectId, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: textarea.value }),
-      });
-      if (!resp.ok) {
-        let detail = resp.statusText;
-        try { detail = (await resp.json()).detail || detail; } catch (err) { /* keep statusText */ }
-        throw new Error(detail);
-      }
-      const project = await resp.json();
-      cfg.description = project.description || "";
+      await save();
       textarea.value = cfg.description;
       renderView(cfg.description);
       note.textContent = "";
       showForm(false);
-    } catch (err) {
-      note.textContent = "Save failed: " + err.message;
-    }
+    } catch (err) { /* shown in the note */ }
   });
 })();

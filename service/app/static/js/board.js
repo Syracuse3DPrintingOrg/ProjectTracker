@@ -416,6 +416,8 @@
     const recur = card ? String(card.recur_days || 0) : "0";
     form.recur_days.value = [...form.recur_days.options].some(o => o.value === recur) ? recur : "0";
     document.getElementById("card-delete").hidden = !card;
+    document.getElementById("card-done").textContent = card ? "Done" : "Add card";
+    document.getElementById("card-cancel").hidden = !!card;
     document.getElementById("assist-actions").hidden = !(card && window.BOARD.aiConfigured);
     document.getElementById("assist-note").textContent = "";
     document.getElementById("handoff-actions").hidden = !card;
@@ -447,11 +449,18 @@
         });
         select.value = card.assignee_id ? String(card.assignee_id) : "";
         if (card.assignee_id && select.value !== String(card.assignee_id)) select.value = "";
+        // Showing the assignee picker is not an edit worth saving.
+        if (form.card_id.value === String(card.id) && !saveTimer) markSaved();
       });
     } else {
       document.getElementById("assignee-row").hidden = true;
     }
     renderDialogChecklist();
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    skipCloseSave = false;
+    saveNote.textContent = "";
+    markSaved();
     dialog.showModal();
   }
 
@@ -494,8 +503,18 @@
     } catch (err) { alert(err.message); }
   });
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  /* ---- saving: edits save as you type, and closing never drops them ---- */
+
+  const saveNote = document.getElementById("card-save-note");
+  const FIELDS = new Set(["title", "description", "priority", "due_date", "labels", "recur_days", "assignee_id"]);
+  let saveTimer = null;
+  let saveChain = Promise.resolve();
+  let lastSaved = "";
+  // Set when the dialog closes after an explicit save or a delete, so the
+  // close handler does not save a second time. openCardDialog clears it.
+  let skipCloseSave = false;
+
+  function cardSnapshot() {
     const body = {
       title: form.title.value.trim(),
       description: form.description.value,
@@ -504,50 +523,132 @@
       labels: form.labels.value,
       recur_days: parseInt(form.recur_days.value, 10),
     };
-    if (!body.title) return;
+    let assigneeName = "";
     if (form.card_id.value && !document.getElementById("assignee-row").hidden) {
-      if (form.assignee_id.value) body.assignee_id = parseInt(form.assignee_id.value, 10);
-      else body.clear_assignee = true;
-    }
-    try {
-      if (form.card_id.value) {
-        const card = await api(`/api/cards/${form.card_id.value}`, { method: "PATCH", body: JSON.stringify(body) });
-        const el = document.querySelector(`#board .card[data-card-id="${card.id}"]`);
-        if (el) {
-          el.dataset.title = card.title;
-          el.dataset.priority = card.priority;
-          el.dataset.due = card.due_date;
-          el.dataset.labels = card.labels;
-          el.dataset.recur = card.recur_days || 0;
-          const chosen = form.assignee_id.selectedOptions[0];
-          el.dataset.assignee = card.assignee_id && chosen ? chosen.textContent : "";
-          el.querySelector(".card-title").textContent = card.title;
-          syncCardChecklist(card);
-          renderMeta(el);
-        }
-        const mini = document.querySelector(`#board .child-card[data-card-id="${card.id}"]`);
-        if (mini) {
-          mini.dataset.title = card.title;
-          mini.querySelector(".child-title").textContent = card.title;
-        }
-        await refreshToday();
+      if (form.assignee_id.value) {
+        body.assignee_id = parseInt(form.assignee_id.value, 10);
+        assigneeName = form.assignee_id.selectedOptions[0].textContent;
       } else {
-        const card = await api("/api/cards", {
-          method: "POST",
-          body: JSON.stringify(Object.assign({ project_id: projectId, column_id: dialogColumnId }, body)),
-        });
-        document.querySelector(`#board .cards[data-column-id="${dialogColumnId}"]`).appendChild(cardEl(card));
+        body.clear_assignee = true;
       }
+    }
+    return { id: form.card_id.value, columnId: dialogColumnId, body, assigneeName };
+  }
+
+  function markSaved() {
+    lastSaved = JSON.stringify(cardSnapshot().body);
+  }
+
+  async function persistCard(snap) {
+    if (snap.id) {
+      const card = await api(`/api/cards/${snap.id}`, { method: "PATCH", body: JSON.stringify(snap.body) });
+      const el = document.querySelector(`#board .card[data-card-id="${card.id}"]`);
+      if (el) {
+        el.dataset.title = card.title;
+        el.dataset.priority = card.priority;
+        el.dataset.due = card.due_date;
+        el.dataset.labels = card.labels;
+        el.dataset.recur = card.recur_days || 0;
+        el.dataset.assignee = card.assignee_id ? snap.assigneeName : "";
+        el.querySelector(".card-title").textContent = card.title;
+        syncCardChecklist(card);
+        renderMeta(el);
+      }
+      const mini = document.querySelector(`#board .child-card[data-card-id="${card.id}"]`);
+      if (mini) {
+        mini.dataset.title = card.title;
+        mini.querySelector(".child-title").textContent = card.title;
+      }
+      await refreshToday();
+    } else {
+      const card = await api("/api/cards", {
+        method: "POST",
+        body: JSON.stringify(Object.assign({ project_id: projectId, column_id: snap.columnId }, snap.body)),
+      });
+      document.querySelector(`#board .cards[data-column-id="${snap.columnId}"]`).appendChild(cardEl(card));
+    }
+    updateCounts();
+  }
+
+  // Captures the form as it is right now and queues the save behind any
+  // earlier one, so a slow request never lands after a newer edit.
+  function saveCard() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    const snap = cardSnapshot();
+    if (!snap.body.title) return Promise.resolve();
+    const key = JSON.stringify(snap.body);
+    if (snap.id && key === lastSaved) return Promise.resolve();
+    lastSaved = key;
+    saveNote.textContent = "Saving...";
+    const run = saveChain.then(() => persistCard(snap));
+    saveChain = run.then(() => {
+      if (form.card_id.value === snap.id && lastSaved === key) saveNote.textContent = "Saved";
+    }, (err) => {
+      if (form.card_id.value === snap.id) {
+        lastSaved = "";
+        saveNote.textContent = "Save failed: " + err.message;
+      }
+    });
+    return run;
+  }
+
+  function scheduleSave(delay) {
+    // A new card is created when the dialog closes rather than halfway
+    // through typing its title.
+    if (!form.card_id.value) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { saveCard().catch(() => { /* shown in the note */ }); }, delay);
+  }
+
+  form.addEventListener("input", (e) => {
+    if (FIELDS.has(e.target.name)) scheduleSave(800);
+  });
+  form.addEventListener("change", (e) => {
+    if (FIELDS.has(e.target.name)) scheduleSave(0);
+  });
+
+  // Escape and opening a subtask both land here.
+  dialog.addEventListener("close", () => {
+    if (skipCloseSave) return;
+    saveCard().catch(err => alert("Save failed: " + err.message));
+  });
+
+  // Leaving the page mid-edit still sends the last few keystrokes.
+  window.addEventListener("pagehide", () => {
+    if (!saveTimer || !dialog.open) return;
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    const snap = cardSnapshot();
+    if (!snap.id || !snap.body.title) return;
+    fetch(`/api/cards/${snap.id}`, {
+      method: "PATCH",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snap.body),
+    });
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!form.title.value.trim()) return;
+    try {
+      await saveCard();
+      skipCloseSave = true;
       dialog.close();
-      updateCounts();
     } catch (err) { alert("Save failed: " + err.message); }
   });
 
-  document.getElementById("card-cancel").addEventListener("click", () => dialog.close());
+  // Only a brand new card has something to throw away.
+  document.getElementById("card-cancel").addEventListener("click", () => {
+    skipCloseSave = true;
+    dialog.close();
+  });
 
   document.getElementById("card-delete").addEventListener("click", async () => {
     const id = form.card_id.value;
     if (!id || !confirm("Delete this card? Its subtasks become cards of their own.")) return;
+    clearTimeout(saveTimer);
     try {
       await api(`/api/cards/${id}`, { method: "DELETE" });
       const boardCard = document.querySelector(`#board .card[data-card-id="${id}"]`);
@@ -557,6 +658,7 @@
         return;
       }
       document.querySelectorAll(`.card[data-card-id="${id}"], .child-card[data-card-id="${id}"]`).forEach(el => el.remove());
+      skipCloseSave = true;
       dialog.close();
       updateCounts();
     } catch (err) { alert(err.message); }
@@ -580,7 +682,9 @@
         form.description.value = data.card.description;
         syncCardChecklist(data.card);
         renderDialogChecklist();
-        note.textContent = "Done. Review and save.";
+        note.textContent = "Done. Review it and edit as needed.";
+        // The server already saved the new description.
+        if (!saveTimer) markSaved();
       }
     } catch (err) {
       note.textContent = err.message;
@@ -837,6 +941,9 @@
       open.title = "Open this subtask's own card";
       open.addEventListener("click", async () => {
         try {
+          // Save the parent now; by the time the close event fires the
+          // form already holds the subtask.
+          saveCard().catch(() => { /* shown in the note */ });
           const child = await api(`/api/cards/${s.id}`);
           dialog.close();
           openCardDialog(child, child.column_id);
@@ -995,7 +1102,8 @@
       form.description.value.replace(/\s+$/, "") + "\n\n---\nResearch notes:\n" + researchText;
     renderDialogChecklist();
     researchDialog.close();
-    document.getElementById("assist-note").textContent = "Added to the description. Save to keep it.";
+    document.getElementById("assist-note").textContent = "Added to the description.";
+    scheduleSave(0);
   });
 
   document.getElementById("research-copy").addEventListener("click", async () => {

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Cards save themselves.** Edits in an open card now save as you
+  type, and closing the dialog with Escape keeps them too, so a stray
+  keypress no longer throws away a long description. A new card is
+  added when you close it with a title; Cancel still discards it. The
+  project description on the overview page saves the same way.
+
 ## [0.16.0] - 2026-07-23
 
 ### Added

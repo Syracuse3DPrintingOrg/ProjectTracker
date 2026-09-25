@@ -53,6 +53,8 @@ Give a column a cap and its header shows the count against it, like `2/3`. Go ov
 
 Drag cards between columns, or reorder them within one. It works with a mouse or a finger.
 
+Changes to an open card save as you type, so there is no Save button to forget. Press Escape or click **Done** and everything is already kept. A new card is added when you close its dialog with a title filled in; **Cancel** is the way to throw one away before it exists.
+
 ### Checklists
 
 Lines like `- [ ] sand the door` in a card's description become a real checklist: tick items off in the card dialog, and the card shows progress like `2/5` on the board. When every item is ticked, the chip changes to show the list is complete.
