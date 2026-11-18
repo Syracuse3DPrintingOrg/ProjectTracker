@@ -82,6 +82,10 @@ def oidc_callback(
         response = RedirectResponse("/account?linked=1", status_code=303)
     else:
         user = users.get_by_sub(sub)
+        if not user and not users.any_users() and oidc.ADMIN_GROUP in (oidc.groups(claims) or []):
+            user = users.create_first_admin_from_oidc(
+                str(claims.get("preferred_username") or ""), sub
+            )
         if not user or user.get("disabled"):
             return _login_error(
                 request,

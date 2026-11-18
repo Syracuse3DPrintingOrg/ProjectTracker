@@ -16,12 +16,16 @@ from . import auth
 
 ROLES = ("admin", "member", "viewer")
 
+# Stored instead of a hash on accounts that Pocket ID created. Nothing
+# matches it, and its owner may set a first password without a current one.
+NO_PASSWORD = "unset$"
+
 
 def _row(r) -> dict | None:
     if not r:
         return None
     user = dict(r)
-    user.pop("password_hash", None)
+    user["has_password"] = not str(user.pop("password_hash", "")).startswith(NO_PASSWORD)
     return user
 
 
@@ -149,7 +153,10 @@ def verify_login(username: str, password: str) -> dict | None:
 def change_own_password(user_id: int, current: str, new: str) -> bool:
     with database.connect() as conn:
         user = _get_full(conn, user_id)
-    if not user or not auth.check_password(current, user["password_hash"]):
+    if not user:
+        return False
+    first = user["password_hash"].startswith(NO_PASSWORD)
+    if not first and not auth.check_password(current, user["password_hash"]):
         return False
     update_user(user_id, password=new)
     return True
@@ -172,6 +179,26 @@ def get_by_sub(sub: str) -> dict | None:
     with database.connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE oidc_sub = ?", (sub,)).fetchone()
     return dict(row) if row else None
+
+
+def create_first_admin_from_oidc(preferred: str, sub: str) -> dict | None:
+    """With no users at all, the first Pocket ID admin claims the instance.
+    The account has no password until its owner sets one. Returns the full
+    row, or None if someone else got there first."""
+    import re
+    import secrets
+
+    base = re.sub(r"[^a-z0-9._-]", "", (preferred or "").strip().lower())[:30] or "admin"
+    with database.connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("SELECT 1 FROM users LIMIT 1").fetchone():
+            return None
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash, role, oidc_sub) VALUES (?, ?, 'admin', ?)",
+            (base, NO_PASSWORD + secrets.token_hex(16), sub),
+        )
+        row = dict(_get_full(conn, cur.lastrowid))
+    return row
 
 
 def link_sub(user_id: int, sub: str) -> None:

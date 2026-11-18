@@ -200,13 +200,17 @@ def login_context(
         "oidc_here": oidc.on_public_host(request.headers.get("host"), settings),
         "oidc_public": oidc.public_origin(settings),
         "oidc_only": oidc.only(settings),
+        "first_run": not auth.auth_required(settings),
     }
 
 
 @router.get("/login")
 def login_page(request: Request, next: str = "/"):
+    from ..services import oidc
+
     settings = config.load_settings()
-    if not auth.auth_required(settings):
+    # With no users SQ is open, unless Pocket ID can claim it for a first admin.
+    if not auth.auth_required(settings) and not oidc.configured(settings):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(
         request, "login.html", login_context(request, settings, safe_next(next), "")

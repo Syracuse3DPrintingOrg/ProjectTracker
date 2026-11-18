@@ -338,3 +338,32 @@ def test_settings_and_account_pages_render(client, provider):
     r = client.post("/api/settings", json={"oidc_client_id": CLIENT_ID, "oidc_client_secret": ""})
     assert r.status_code == 200 and oidc.client_secret() == SECRET
     assert client.post("/api/settings", json={"public_url": "sq.example"}).status_code == 422
+
+
+def test_first_pocket_id_admin_claims_an_empty_instance(client, provider):
+    assert "first admin" in client.get("/login").text
+    provider.claims = {"preferred_username": "Dan"}
+    r = trip(client, provider)
+    assert r.status_code == 303
+    dan = users.get_by_sub(DAN_SUB)
+    assert dan["username"] == "dan" and dan["role"] == "admin"
+    # The instance is locked now, and this browser is signed in.
+    assert client.get("/api/projects").status_code == 200
+    client.get("/logout")
+    assert client.get("/api/projects").status_code == 401
+    # No password works yet, then the owner sets one without a current one.
+    assert password_login(client, "dan", "").status_code == 401
+    assert trip(client, provider).status_code == 303
+    assert "Set a password" in client.get("/account").text
+    r = client.post("/api/account/password", json={"new_password": "hunter2"})
+    assert r.status_code == 200
+    assert password_login(client, "dan", "hunter2").status_code == 303
+    # From then on the current password is required again.
+    r = client.post("/api/account/password", json={"new_password": "other"})
+    assert r.status_code == 422
+
+
+def test_only_admins_group_can_claim_an_empty_instance(client, provider):
+    provider.claims = {"groups": ["family"]}
+    assert trip(client, provider).status_code == 403
+    assert not users.any_users()

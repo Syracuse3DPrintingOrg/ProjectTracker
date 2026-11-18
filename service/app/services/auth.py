@@ -32,6 +32,8 @@ def hash_password(password: str) -> str:
 
 
 def check_password(password: str, stored: str) -> bool:
+    if stored.startswith("unset$"):
+        return False  # an account Pocket ID made, with no password yet
     if stored.startswith("pbkdf2$"):
         try:
             _, salt, digest = stored.split("$", 2)

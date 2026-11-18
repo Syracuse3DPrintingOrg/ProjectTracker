@@ -5,6 +5,9 @@
   <h1>{{ app_title }}</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
+  {% if first_run %}
+    <p class="muted">SQ has no users yet. Sign in with Pocket ID to become its first admin.</p>
+  {% endif %}
   {% if oidc_ready and not recovery %}
     {% if oidc_here %}
       <p><a class="btn primary" href="/auth/oidc/start?next={{ next | urlencode }}">Sign in with Pocket ID</a></p>
@@ -13,7 +16,8 @@
     {% endif %}
   {% endif %}
 
-  {% if recovery or not oidc_only %}
+  {% if first_run %}
+  {% elif recovery or not oidc_only %}
     {% if recovery %}
       <p class="muted">Admin recovery: for when Pocket ID is down. Admin accounts only.</p>
     {% elif oidc_ready and oidc_here %}

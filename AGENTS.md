@@ -78,6 +78,17 @@ python -c "import sys; sys.path.insert(0,'service'); from app.main import app"
 suite and the import smoke test. A user-facing change also needs a
 CHANGELOG entry (see Versioning).
 
+## Deploying Without the Registry
+
+While the image publish workflow is blocked, a release reaches a Docker
+host with `scripts/deploy.sh <ssh-target> <host-data-dir> [port]`. Run it
+on a machine with Docker (image builds belong on the task server, not the
+dev VM). It ships the image over SSH, backs up the data folder next to it
+under `backups/` (last five kept), keeps the old container's environment,
+waits for `/health` to report the new version, and restores the old image
+if it does not. Where production runs and its data path are recorded in
+the owner's inventory, not here: this repo is public.
+
 ## Versioning
 
 - `APP_VERSION` in `service/app/config.py` is the single source of truth

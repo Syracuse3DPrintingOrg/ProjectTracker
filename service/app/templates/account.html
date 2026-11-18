@@ -32,14 +32,22 @@
   {% endif %}
   {% endif %}
 
+  {% if me.has_password %}
   <h2 style="font-size: 1rem; margin-top: 1.6rem;">Change password</h2>
+  {% else %}
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Set a password</h2>
+  <p class="muted">You sign in with Pocket ID, so you do not need one day to day.
+    {% if me.role == "admin" %}A password lets you use the recovery sign-in if Pocket ID is ever down.{% endif %}</p>
+  {% endif %}
   <form id="password-form">
+    {% if me.has_password %}
     <label>Current password</label>
     <input name="current_password" type="password" required autocomplete="current-password">
+    {% endif %}
     <label>New password <span class="muted">(at least 4 characters)</span></label>
     <input name="new_password" type="password" required minlength="4" autocomplete="new-password">
     <div class="dialog-actions">
-      <button class="primary" type="submit">Change password</button>
+      <button class="primary" type="submit">{{ "Change password" if me.has_password else "Set password" }}</button>
       <span class="assist-note" id="password-note"></span>
     </div>
   </form>
@@ -76,7 +84,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            current_password: f.current_password.value,
+            current_password: f.current_password ? f.current_password.value : "",
             new_password: f.new_password.value,
           }),
         });

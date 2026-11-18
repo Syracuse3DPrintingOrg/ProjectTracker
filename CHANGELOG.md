@@ -15,6 +15,10 @@
   working, except for an admin recovery sign-in at `/login/recovery`
   for days when Pocket ID is down. API keys, display tokens and the
   Claude Code connector keep working as before.
+- **Claim a fresh SQ with Pocket ID.** On an SQ with no users yet, the
+  first person from Pocket ID's `admins` group to sign in becomes its
+  admin. Accounts made this way can set a password later from the
+  Account page, for the recovery sign-in.
 
 ### Changed
 

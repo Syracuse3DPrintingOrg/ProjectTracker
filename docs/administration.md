@@ -32,6 +32,8 @@ SQ can sign people in with [Pocket ID](https://pocket-id.org), so they use a pas
 2. In SQ, open Settings, Users and Access, and fill in the Pocket ID sign-in section: SQ's public address, the Pocket ID address, the client ID and the client secret. You can also set them with `TRACKER_PUBLIC_URL`, `TRACKER_OIDC_ISSUER`, `TRACKER_OIDC_CLIENT_ID` and `TRACKER_OIDC_CLIENT_SECRET`, or put the secret alone in `data/oidc_client_secret`.
 3. Each person signs in the usual way once, opens their Account page on the public address, and presses **Link Pocket ID**. From then on the login page's **Sign in with Pocket ID** button takes them straight in.
 
+On an SQ with no users yet, open `/login` on the public address and sign in with Pocket ID: if you are in the `admins` group you become SQ's first admin, already linked. That account has no password; set one from your Account page if you want the recovery sign-in below.
+
 The button only appears on the public address, because Pocket ID sends people back there. On any other address the login page points at the public one.
 
 Roles follow Pocket ID's groups: anyone in the `admins` group is an admin in SQ, and an admin who leaves that group becomes a member the next time they sign in. If Pocket ID sends no groups at all, roles stay as they are. SQ never demotes its last admin.
