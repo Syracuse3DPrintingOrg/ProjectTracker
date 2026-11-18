@@ -100,6 +100,40 @@
           <span class="assist-note" id="users-note"></span>
         </div>
 
+        <h2>Pocket ID sign-in</h2>
+        <p class="muted">Let people sign in with Pocket ID passkeys. Each person links their
+          SQ account once from their account page. Members of the Pocket ID group
+          <code>admins</code> are admins here; anyone who leaves it becomes a member.</p>
+        <form id="oidc-form">
+          <label>Public address of SQ</label>
+          <input name="public_url" placeholder="https://sq.example.com" value="{{ settings.public_url }}" autocomplete="off">
+          <label>Pocket ID address (issuer)</label>
+          <input name="oidc_issuer" placeholder="https://id.example.com" value="{{ settings.oidc_issuer }}" autocomplete="off">
+          <label>Client ID</label>
+          <input name="oidc_client_id" value="{{ settings.oidc_client_id }}" autocomplete="off">
+          <label>Client secret {% if has_oidc_secret %}<span class="muted">(saved; leave blank to keep it)</span>{% endif %}</label>
+          <input name="oidc_client_secret" type="password" autocomplete="off">
+          {% if oidc_callback %}<p class="muted" style="font-size: 0.85rem;">Callback URL for the Pocket ID client: <code>{{ oidc_callback }}</code></p>{% endif %}
+          <div class="dialog-actions">
+            <button class="primary" type="submit">Save</button>
+            <span class="assist-note" id="oidc-note"></span>
+          </div>
+        </form>
+        {% if oidc_ready %}
+        <form id="oidc-only-form">
+          <label style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="checkbox" name="oidc_only" style="width: auto;" {% if oidc_only %}checked{% endif %}
+              {% if not me_linked and not oidc_only %}disabled{% endif %}>
+            Pocket ID is the only way in
+          </label>
+          <p class="muted" style="font-size: 0.85rem;">Hides the password form and refuses passwords.
+            {% if not me_linked %}Link your own account to Pocket ID first (on your account page).{% endif %}
+            If Pocket ID is ever down, admins can still get in at <code>/login/recovery</code>
+            with their SQ password.</p>
+          <span class="assist-note" id="oidc-only-note"></span>
+        </form>
+        {% endif %}
+
         <h2>API keys</h2>
         <p class="muted">For Home Assistant and scripts. A key acts with the role you give it
           (member can act, viewer can only read) and is sent as an <code>X-API-Key</code>

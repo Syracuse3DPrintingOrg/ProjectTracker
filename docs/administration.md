@@ -24,6 +24,24 @@ Every signed-in user has an Account page for changing their password (current pa
 
 Passwords are stored as salted PBKDF2 (SHA-256, 200,000 rounds). Accounts created before 0.12 used a simpler salted hash; those still verify, so nobody gets locked out by updating, and any password change moves the account onto PBKDF2. An even older install that used the single shared password gets that password migrated automatically into an `admin` account.
 
+## Sign in with Pocket ID
+
+SQ can sign people in with [Pocket ID](https://pocket-id.org), so they use a passkey instead of a password. Any OpenID Connect provider that sends a `groups` claim works the same way.
+
+1. In Pocket ID, create an OIDC client for SQ with PKCE on. Its callback URL is your public SQ address followed by `/auth/oidc/callback`, for example `https://sq.example.com/auth/oidc/callback`.
+2. In SQ, open Settings, Users and Access, and fill in the Pocket ID sign-in section: SQ's public address, the Pocket ID address, the client ID and the client secret. You can also set them with `TRACKER_PUBLIC_URL`, `TRACKER_OIDC_ISSUER`, `TRACKER_OIDC_CLIENT_ID` and `TRACKER_OIDC_CLIENT_SECRET`, or put the secret alone in `data/oidc_client_secret`.
+3. Each person signs in the usual way once, opens their Account page on the public address, and presses **Link Pocket ID**. From then on the login page's **Sign in with Pocket ID** button takes them straight in.
+
+The button only appears on the public address, because Pocket ID sends people back there. On any other address the login page points at the public one.
+
+Roles follow Pocket ID's groups: anyone in the `admins` group is an admin in SQ, and an admin who leaves that group becomes a member the next time they sign in. If Pocket ID sends no groups at all, roles stay as they are. SQ never demotes its last admin.
+
+### Pocket ID as the only way in
+
+Once your own account is linked, the **Pocket ID is the only way in** switch appears under the sign-in settings. With it on, the password form disappears, passwords are refused, and sessions that started with a password end. Sessions from Pocket ID carry on.
+
+If Pocket ID is ever down, admins can still get in at `/login/recovery` with their SQ password (the login page links to it). Members and viewers wait for Pocket ID to come back. API keys, the display token and the Claude Code connector are not affected by any of this.
+
 ## A tour of the Settings panes
 
 Settings is a sidebar of panes, admin only once logins are on:
@@ -61,7 +79,7 @@ Know what the JSON does **not** contain: user accounts and passwords, settings (
 ## Security notes
 
 - **Open until the first user.** With no users, SQ trusts the network completely, which suits a home LAN. Do not expose an open instance to the internet; add users first, and even then prefer keeping SQ on the LAN or behind your own access controls.
-- **What locks when users exist.** Everything requires a session, an API key, or a device token, except the login page, the health check, static assets, and the display pages with a valid token.
+- **What locks when users exist.** Everything requires a session, an API key, or a device token, except the login page, the Pocket ID sign-in pages, the health check, static assets, and the display pages with a valid token.
 - **What tokens can and cannot do.** The display token reads the Today list and can toggle a task done from the kiosk; that is its entire reach, with no access to boards, settings, or the rest of the API. The connector token can only post Claude Code status snapshots. API keys act as member or viewer, never admin, so they cannot touch users, settings, keys, display configuration, or backups. A leaked device credential is an annoyance, not a takeover.
 - **Passwords and sessions.** The 4-character minimum is a floor for a household; use longer passwords for anything more exposed. Sessions are signed with a key stored at `data/secret_key` (overridable with `TRACKER_SECRET_KEY`), so guard the data folder like the credential store it is.
 

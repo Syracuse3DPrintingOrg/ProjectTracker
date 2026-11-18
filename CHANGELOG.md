@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-18
+
+### Added
+
+- **Sign in with Pocket ID.** Link your account once from the Account
+  page and sign in with a passkey from then on. Pocket ID's `admins`
+  group makes someone an admin in SQ. Set it up under Settings, Users
+  and Access.
+- **Pocket ID only.** An admin whose account is linked can make Pocket
+  ID the only way in: the password form goes away and passwords stop
+  working, except for an admin recovery sign-in at `/login/recovery`
+  for days when Pocket ID is down. API keys, display tokens and the
+  Claude Code connector keep working as before.
+
 ### Changed
 
 - **Cards save themselves.** Edits in an open card now save as you

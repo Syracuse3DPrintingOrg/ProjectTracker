@@ -4,12 +4,12 @@ import os
 import secrets
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from .. import config
-from ..services import auth, displays, llm, store
+from ..services import auth, displays, llm, oidc, store
 from ..services import users as users_svc
 from .connectors_router import _connector_token
 from .displays_router import _base_url, _with_urls
@@ -39,6 +39,11 @@ class SettingsIn(BaseModel):
     clear_password: bool | None = None
     rotate_display_token: bool | None = None
     clear_display_token: bool | None = None
+    public_url: str | None = None
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_only: bool | None = None
 
 
 @router.get("/settings")
@@ -73,6 +78,11 @@ def settings_page(request: Request):
             # Only admins (or an unlocked instance) reach this page, so the
             # connector token may be rendered into the setup command.
             "connector_token": _connector_token(settings),
+            "oidc_ready": oidc.configured(settings),
+            "oidc_only": oidc.only(settings),
+            "has_oidc_secret": bool(oidc.client_secret(settings)),
+            "oidc_callback": oidc.redirect_uri(settings) if oidc.public_origin(settings) else "",
+            "me_linked": bool(me and me.get("oidc_sub")),
             "github_repo": GITHUB_REPO,
             "docker_image": DOCKER_IMAGE,
         },
@@ -80,7 +90,7 @@ def settings_page(request: Request):
 
 
 @router.post("/api/settings")
-def save_settings(body: SettingsIn):
+def save_settings(body: SettingsIn, request: Request):
     updates = {}
     data = body.model_dump(exclude_unset=True)
     for key in (
@@ -89,13 +99,16 @@ def save_settings(body: SettingsIn):
         "llm_model",
         "app_title",
         "base_url",
+        "public_url",
+        "oidc_issuer",
+        "oidc_client_id",
     ):
         if key in data and data[key] is not None:
             updates[key] = data[key].strip()
     if updates.get("llm_provider") not in (None, *PROVIDERS):
         updates.pop("llm_provider")
     # API keys: an empty or missing field leaves the stored secret alone.
-    for key in ("gemini_api_key", "anthropic_api_key", "openai_api_key"):
+    for key in ("gemini_api_key", "anthropic_api_key", "openai_api_key", "oidc_client_secret"):
         if data.get(key):
             updates[key] = data[key].strip()
     # Passwords moved to real user accounts (see /api/users); the old
@@ -104,12 +117,34 @@ def save_settings(body: SettingsIn):
         updates["display_token"] = secrets.token_urlsafe(16)
     if data.get("clear_display_token"):
         updates["display_token"] = ""
+    for key in ("public_url", "oidc_issuer"):
+        value = updates.get(key)
+        if value and not value.startswith(("https://", "http://")):
+            raise HTTPException(422, "addresses start with https://")
+        if value:
+            updates[key] = value.rstrip("/")
+    if data.get("oidc_only") is not None:
+        if data["oidc_only"]:
+            _check_can_go_oidc_only({**config.load_settings(), **updates}, request)
+        updates["oidc_only"] = bool(data["oidc_only"])
     settings = config.save_settings(updates)
     return {
         "ok": True,
         "ai_configured": llm.is_configured(settings),
         "display_token": settings.get("display_token", ""),
     }
+
+
+def _check_can_go_oidc_only(settings: dict, request: Request) -> None:
+    """Only an admin who can already get in with Pocket ID may make it the
+    only way in, so nobody locks the instance with nobody able to enter."""
+    if not oidc.configured(settings):
+        raise HTTPException(422, "Set up Pocket ID sign-in first.")
+    me = getattr(request.state, "user", None)
+    if not me or me.get("role") != "admin" or not me.get("oidc_sub"):
+        raise HTTPException(
+            422, "Link your own account to Pocket ID (on your account page) first."
+        )
 
 
 @router.post("/api/settings/test-llm")

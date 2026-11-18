@@ -179,15 +179,37 @@ def calendar_page(request: Request):
     )
 
 
+def safe_next(next_url: str) -> str:
+    """Only same-site paths, so a login link cannot bounce people elsewhere."""
+    if not next_url.startswith("/") or next_url.startswith("//") or "\\" in next_url:
+        return "/"
+    return next_url
+
+
+def login_context(
+    request: Request, settings: dict, next_url: str, error: str, recovery: bool = False
+) -> dict:
+    from ..services import oidc
+
+    return {
+        **_page_context(settings, request),
+        "next": next_url,
+        "error": error,
+        "recovery": recovery,
+        "oidc_ready": oidc.configured(settings),
+        "oidc_here": oidc.on_public_host(request.headers.get("host"), settings),
+        "oidc_public": oidc.public_origin(settings),
+        "oidc_only": oidc.only(settings),
+    }
+
+
 @router.get("/login")
 def login_page(request: Request, next: str = "/"):
     settings = config.load_settings()
     if not auth.auth_required(settings):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(
-        request,
-        "login.html",
-        {**_page_context(settings, request), "next": next, "error": ""},
+        request, "login.html", login_context(request, settings, safe_next(next), "")
     )
 
 
@@ -198,30 +220,27 @@ def login(
     password: str = Form(""),
     next: str = Form("/"),
 ):
-    from ..services import users
+    from ..services import oidc, users
 
     settings = config.load_settings()
-    if not next.startswith("/") or next.startswith("//"):
-        next = "/"
+    next = safe_next(next)
+    if oidc.only(settings):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            login_context(request, settings, next, "Sign in with Pocket ID."),
+            status_code=403,
+        )
     user = users.verify_login(username, password)
     if user:
         response = RedirectResponse(next, status_code=303)
-        response.set_cookie(
-            auth.SESSION_COOKIE,
-            auth.make_session_token(user["id"], user["password_hash"][-12:]),
-            max_age=auth.SESSION_MAX_AGE,
-            httponly=True,
-            samesite="lax",
-        )
+        # Not Secure: the password form also works over plain http on the LAN.
+        auth.set_session(response, user, auth.METHOD_PASSWORD)
         return response
     return templates.TemplateResponse(
         request,
         "login.html",
-        {
-            **_page_context(settings, request),
-            "next": next,
-            "error": "Wrong username or password.",
-        },
+        login_context(request, settings, next, "Wrong username or password."),
         status_code=401,
     )
 

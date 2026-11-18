@@ -13,6 +13,25 @@
     {% endif %}
   </p>
 
+  {% if oidc_ready %}
+  <h2 style="font-size: 1rem; margin-top: 1.6rem;">Pocket ID</h2>
+  {% if linked_now %}<p class="assist-note">Linked. Next time, just sign in with Pocket ID.</p>{% endif %}
+  {% if me.oidc_sub %}
+    <p class="muted">Your account is linked to Pocket ID, so you can sign in with a passkey.</p>
+    {% if not oidc_only %}
+    <div class="dialog-actions">
+      <button type="button" id="oidc-unlink">Unlink Pocket ID</button>
+      <span class="assist-note" id="oidc-note"></span>
+    </div>
+    {% endif %}
+  {% elif oidc_here %}
+    <p class="muted">Link your account to Pocket ID and sign in with a passkey instead of a password.</p>
+    <p><a class="btn primary" href="/auth/oidc/start?link=1">Link Pocket ID</a></p>
+  {% else %}
+    <p class="muted">To link Pocket ID, open <a href="{{ oidc_public }}/account">{{ oidc_public }}/account</a>.</p>
+  {% endif %}
+  {% endif %}
+
   <h2 style="font-size: 1rem; margin-top: 1.6rem;">Change password</h2>
   <form id="password-form">
     <label>Current password</label>
@@ -72,6 +91,17 @@
         note.textContent = "Change failed: " + err.message;
       }
     });
+
+    const unlink = document.getElementById("oidc-unlink");
+    if (unlink) {
+      unlink.addEventListener("click", async () => {
+        const note = document.getElementById("oidc-note");
+        const resp = await fetch("/api/account/oidc/unlink", { method: "POST" });
+        if (resp.ok) { window.location = "/account"; return; }
+        const data = await resp.json().catch(() => ({}));
+        note.textContent = data.detail || resp.statusText;
+      });
+    }
 
     document.getElementById("webhook-form").addEventListener("submit", async (e) => {
       e.preventDefault();

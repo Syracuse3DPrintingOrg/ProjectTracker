@@ -1,8 +1,8 @@
-"""Optional single-user login.
+"""Logins and sessions.
 
-With no password set the app is open (fine on a trusted LAN). Setting a
-password on the Settings page (or TRACKER_PASSWORD_HASH in the
-environment) turns on a login page backed by a signed session cookie.
+With no users the app is open (fine on a trusted LAN). Once a user exists,
+people sign in with a password or with Pocket ID (see oidc.py), backed by
+a signed session cookie.
 Display endpoints can instead present the display token, so a wall screen
 never needs a login flow.
 """
@@ -79,8 +79,30 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(_secret_key(), salt="tracker-session")
 
 
-def make_session_token(user_id: int, fingerprint: str) -> str:
-    return _serializer().dumps({"uid": user_id, "fp": fingerprint})
+# How a session was started. When Pocket ID becomes the only way in,
+# sessions from the plain password form stop working; Pocket ID sessions
+# and admin recovery sessions keep going.
+METHOD_PASSWORD = "password"
+METHOD_OIDC = "oidc"
+METHOD_RECOVERY = "recovery"
+
+
+def make_session_token(
+    user_id: int, fingerprint: str, method: str = METHOD_PASSWORD
+) -> str:
+    return _serializer().dumps({"uid": user_id, "fp": fingerprint, "m": method})
+
+
+def set_session(response, user: dict, method: str, secure: bool = False) -> None:
+    """Sign a full user row (hash included) in on this response."""
+    response.set_cookie(
+        SESSION_COOKIE,
+        make_session_token(user["id"], user["password_hash"][-12:], method),
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+    )
 
 
 def session_user_id(token: str | None) -> int | None:
@@ -99,6 +121,11 @@ def session_user_id(token: str | None) -> int | None:
     fingerprint = users.session_fingerprint(data["uid"])
     if fingerprint is None or data.get("fp") != fingerprint:
         return None
+    if data.get("m", METHOD_PASSWORD) == METHOD_PASSWORD:
+        from . import oidc
+
+        if oidc.only():
+            return None
     return data["uid"]
 
 

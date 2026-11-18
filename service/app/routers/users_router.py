@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..services import notifications, users
-from .pages import _page_context, templates
+from .pages import templates
 
 router = APIRouter(tags=["users"])
 
@@ -98,8 +98,9 @@ def set_webhook(body: WebhookIn, request: Request):
 
 
 @router.get("/account")
-def account_page(request: Request):
+def account_page(request: Request, linked: bool = False):
     from .. import config
+    from .pages import login_context
 
     me = getattr(request.state, "user", None)
     if not me:
@@ -107,5 +108,9 @@ def account_page(request: Request):
     return templates.TemplateResponse(
         request,
         "account.html",
-        {**_page_context(config.load_settings(), request), "me": me},
+        {
+            **login_context(request, config.load_settings(), "/account", ""),
+            "me": me,
+            "linked_now": linked,
+        },
     )

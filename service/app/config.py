@@ -10,7 +10,7 @@ import os
 import threading
 from pathlib import Path
 
-APP_VERSION = "0.16.0"
+APP_VERSION = "0.17.0"
 APP_NAME = "SQ"
 APP_TAGLINE = "the project tracker for the easily distracted"
 
@@ -30,6 +30,11 @@ _SAVEABLE = {
     "app_title",
     "base_url",
     "displays",
+    "public_url",
+    "oidc_issuer",
+    "oidc_client_id",
+    "oidc_client_secret",
+    "oidc_only",
 }
 
 _DEFAULTS = {
@@ -45,6 +50,11 @@ _DEFAULTS = {
     "app_title": APP_NAME,
     "base_url": "",
     "displays": [],
+    "public_url": "",
+    "oidc_issuer": "",
+    "oidc_client_id": "",
+    "oidc_client_secret": "",
+    "oidc_only": False,
 }
 
 # Environment variable names that override each saved setting.
@@ -60,6 +70,10 @@ _ENV_MAP = {
     "connector_token": "TRACKER_CONNECTOR_TOKEN",
     "app_title": "TRACKER_TITLE",
     "base_url": "TRACKER_BASE_URL",
+    "public_url": "TRACKER_PUBLIC_URL",
+    "oidc_issuer": "TRACKER_OIDC_ISSUER",
+    "oidc_client_id": "TRACKER_OIDC_CLIENT_ID",
+    "oidc_client_secret": "TRACKER_OIDC_CLIENT_SECRET",
 }
 
 _MODEL_DEFAULTS = {

@@ -16,6 +16,7 @@ from .routers import (
     displays_router,
     integrations_router,
     llm_router,
+    oidc_router,
     notifications_router,
     pages,
     settings_router,
@@ -39,7 +40,7 @@ _STATIC = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=_STATIC), name="static")
 
 # Paths that never require a session.
-_OPEN_PREFIXES = ("/static/", "/login", "/health")
+_OPEN_PREFIXES = ("/static/", "/login", "/health", "/auth/oidc/")
 _DISPLAY_PREFIXES = ("/display", "/api/display", "/kiosk", "/api/kiosk")
 
 
@@ -103,6 +104,7 @@ app.include_router(display.router)
 app.include_router(displays_router.router)
 app.include_router(connectors_router.router)
 app.include_router(users_router.router)
+app.include_router(oidc_router.router)
 app.include_router(notifications_router.router)
 app.include_router(integrations_router.router)
 app.include_router(attachments_router.router)

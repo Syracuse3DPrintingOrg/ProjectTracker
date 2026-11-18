@@ -150,6 +150,49 @@
     }
   });
 
+  // --- Pocket ID sign-in ---
+  async function saveDetail(body, noteId, okText) {
+    const note = document.getElementById(noteId);
+    note.textContent = "Saving...";
+    const resp = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    if (resp && resp.ok) { note.textContent = okText; return true; }
+    let detail = resp ? resp.statusText : "no answer";
+    try { detail = (await resp.json()).detail || detail; } catch (err) { /* not JSON */ }
+    note.textContent = "Save failed: " + detail;
+    return false;
+  }
+
+  const oidcForm = document.getElementById("oidc-form");
+  if (oidcForm) {
+    oidcForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const body = {
+        public_url: f.public_url.value.trim(),
+        oidc_issuer: f.oidc_issuer.value.trim(),
+        oidc_client_id: f.oidc_client_id.value.trim(),
+      };
+      if (f.oidc_client_secret.value) body.oidc_client_secret = f.oidc_client_secret.value;
+      if (await saveDetail(body, "oidc-note", "Saved. Reloading...")) {
+        setTimeout(() => { window.location.reload(); }, 600);
+      }
+    });
+  }
+
+  const oidcOnly = document.querySelector("#oidc-only-form input[name=oidc_only]");
+  if (oidcOnly) {
+    oidcOnly.addEventListener("change", async () => {
+      const on = oidcOnly.checked;
+      const ok = await saveDetail({ oidc_only: on }, "oidc-only-note",
+        on ? "Pocket ID is now the only way in." : "Passwords work again.");
+      if (!ok) oidcOnly.checked = !on;
+    });
+  }
+
   document.getElementById("general-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     await save({ app_title: e.target.app_title.value.trim() }, "general-note");

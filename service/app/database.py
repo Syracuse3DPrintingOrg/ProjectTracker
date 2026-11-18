@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'member',
     disabled INTEGER NOT NULL DEFAULT 0,
     webhook_url TEXT NOT NULL DEFAULT '',
+    oidc_sub TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS notifications (
@@ -150,6 +151,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE users ADD COLUMN webhook_url TEXT NOT NULL DEFAULT ''"
         )
+    if "oidc_sub" not in user_cols:
+        # The Pocket ID subject this account is linked to, if any.
+        conn.execute("ALTER TABLE users ADD COLUMN oidc_sub TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub"
+        " ON users(oidc_sub) WHERE oidc_sub IS NOT NULL"
+    )
     card_cols = {r["name"] for r in conn.execute("PRAGMA table_info(cards)")}
     if "recur_days" not in card_cols:
         conn.execute(

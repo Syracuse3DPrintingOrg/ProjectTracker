@@ -165,6 +165,49 @@ def session_fingerprint(user_id: int) -> str | None:
     return row["password_hash"][-12:]
 
 
+def get_by_sub(sub: str) -> dict | None:
+    """The account linked to this Pocket ID subject, hash included."""
+    if not sub:
+        return None
+    with database.connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE oidc_sub = ?", (sub,)).fetchone()
+    return dict(row) if row else None
+
+
+def link_sub(user_id: int, sub: str) -> None:
+    with database.connect() as conn:
+        other = conn.execute(
+            "SELECT id FROM users WHERE oidc_sub = ? AND id != ?", (sub, user_id)
+        ).fetchone()
+        if other:
+            raise ValueError("That Pocket ID account is already linked to another SQ user.")
+        conn.execute("UPDATE users SET oidc_sub = ? WHERE id = ?", (sub, user_id))
+
+
+def unlink_sub(user_id: int) -> None:
+    with database.connect() as conn:
+        conn.execute("UPDATE users SET oidc_sub = NULL WHERE id = ?", (user_id,))
+
+
+def sync_role(user_id: int, groups: list[str] | None, admin_group: str) -> None:
+    """Pocket ID decides who is an admin: people in the admin group are
+    admins here, and an admin who left it drops to member. With no groups
+    claim at all nothing changes. The last active admin is never demoted."""
+    if groups is None:
+        return
+    user = get_user(user_id)
+    if not user:
+        return
+    if admin_group in groups:
+        if user["role"] != "admin":
+            update_user(user_id, role="admin")
+    elif user["role"] == "admin":
+        try:
+            update_user(user_id, role="member")
+        except ValueError:
+            pass
+
+
 def migrate_legacy_password() -> None:
     """Turn a pre-multi-user install's single password into the admin
     account, once, so existing logins keep working."""
